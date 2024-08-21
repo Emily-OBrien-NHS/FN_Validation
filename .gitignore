@@ -20,4 +20,4 @@ Events Data/
 FNvenv/
 
 #pycache
-_pycache_/
+__pycache__/
