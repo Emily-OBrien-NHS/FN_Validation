@@ -72,7 +72,6 @@ locations = (process_locations.merge(location_capacities,
                                        how='outer'))
 
 output_text = print_and_add_str(output_text, '-----------------LOCATIONS-----------------')
-output_text = print_and_add_str(output_text, '----Process Locations and Location Capacities')
 #Print the process locations with capacities missing
 proc_loc_no_cap = (locations.loc[locations['Location Loc Cap'].isna(),
                                  'Location Proc Loc'].drop_duplicates()
@@ -86,7 +85,6 @@ cap_no_proc_loc = (locations.loc[locations['Location Proc Loc'].isna(),
 output_text = print_missing("--Locations with capacities that don't match to a process location:",
               cap_no_proc_loc, output_text)
 
-output_text = print_and_add_str(output_text, '----Location Opening Hours')
 #Print the locations that don't have opening hours
 no_open_hours = locations.loc[locations['Location Loc Open'].isna(),
                     'Location Proc Loc'].drop_duplicates().dropna().to_list()

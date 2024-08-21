@@ -26,7 +26,7 @@ SPAWN = "Spawn"
 REMOVED = "Removed"
 WALK_IN = "Walk-In"
 ALL_PATHWAYS = "All"
-WAITING_FOR_BED = "Wait for bed"
+WAITING_FOR_BED = "Wait for Bed"
 #Staff
 RECEPTIONIST = "Receptionist"
 CONSULTANT = "Consultant"
@@ -65,6 +65,9 @@ locations_pathway_map = {"Ambulance": "Majors",
                          "Majors Cubicles": "Majors",
                          "Minors": "Minors",
                          "Resus": "Resus"}
+admitted_map = {'Admitted - MAU':'Admitted',
+                'Admitted - Other Derriford Ward':'Admitted',
+                'Admitted - SDEC':'Admitted'}
 pathways_wait_in_place = ["Majors", "Resus"]
 excluded_event_names = ["Nursing Assessment", "Clinically Ready to Proceed"]
 locations_to_drop = ["Paediatrics", "Plym"]
@@ -93,12 +96,10 @@ natural_order_for_processes = { SPAWN: 0,
                                 "Clinically Ready to Proceed": 12,
                                 "Decision to Admit": 13,
                                 "Discharged": 14,
-                                WAITING_FOR_BED + " - (Admitted - MAU)": 14,
-                                WAITING_FOR_BED + " - (Admitted - Other Derriford Ward)": 14,
-                                WAITING_FOR_BED + " - (Admitted - SDEC)": 14,
-                                "Admitted - Other Derriford Ward": 15,
-                                "Admitted - MAU": 15,
-                                "Admitted - SDEC": 15,
+                                WAITING_FOR_BED + " - Admitted - MAU": 14,
+                                WAITING_FOR_BED + " - Admitted - Other Derriford Ward": 14,
+                                WAITING_FOR_BED + " - Admitted - SDEC": 14,
+                                "Admitted": 15,
                                 REMOVED: 16}
 
 ####################PROCESS RESOURCE REQUIREMENTS DATA####################

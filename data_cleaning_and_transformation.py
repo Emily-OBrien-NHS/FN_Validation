@@ -1,5 +1,5 @@
 from utils import sort_events
-from config import WALK_IN, SPAWN, REMOVED, WAITING_FOR_BED
+from config import WALK_IN, SPAWN, REMOVED, WAITING_FOR_BED, admitted_map
 import pandas as pd
 
 #-----------------------------------initial cleaning functions on raw data
@@ -325,8 +325,11 @@ def add_wait_for_beds_for_admitted_patients(events_quality):
                                  lastevent_filter_groupby["EventName"]
                                  != "Discharged"].copy()
     #Add in the extra wait for bed event
-    admitted_patients["EventName"] = (WAITING_FOR_BED + " - ("
-                                      + admitted_patients["EventName"] + ")")
+    admitted_patients["EventName"] = (WAITING_FOR_BED + " - "
+                                      + admitted_patients["EventName"] + "")
+    #rename admitted events to just admitted
+    events_quality['EventName'] = (events_quality['EventName']
+                                   .replace(admitted_map))
 
     events_quality = pd.concat([events_quality, admitted_patients])
 
