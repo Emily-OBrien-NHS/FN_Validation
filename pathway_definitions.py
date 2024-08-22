@@ -6,6 +6,7 @@ from pm4py.visualization.dfg import visualizer as dfg_visualizer  # type: ignore
 from config import SPAWN, REMOVED
 from graphviz import Digraph
 import pandas as pd
+import numpy as np
 
 
 def add_reset_transitions(events_data):
@@ -126,9 +127,10 @@ def add_obs_repeat_splits(pathway_definition, obs_splits):
         after triage to kick off repeated obs added
     """
     #Filter the pathway to the triage events that need the extra event to
-    #trigger different obs repetitions. Create df of these and remove them from
-    #the pathway definitions.
-    triage_events_for_obs = set([i[0] for i in obs_splits])
+    #trigger different obs repetitions. i[0]==i[0] to remove nan in From event
+    #where kick off events are not required. Create df of these and remove them
+    #from the pathway definitions.
+    triage_events_for_obs = set([i[0] for i in obs_splits if i[0]==i[0]])
     triage_events_mask = pathway_definition['From Process'].isin(triage_events_for_obs)
     triage_events = pathway_definition.loc[triage_events_mask].copy()
     pathway_definition = pathway_definition.loc[~triage_events_mask].copy()
@@ -137,9 +139,12 @@ def add_obs_repeat_splits(pathway_definition, obs_splits):
     #events going to the triaged obs events with their probabilities.
     triage_obs = []
     for triage_values in obs_splits:
-        triage_obs.append(
-            [triage_values[0], triage_values[1], None, float(triage_values[2]),
-             'Process to kick off repeated obs for different timings'])
+        #Only add events that require a kick off event (anywhere that
+        #triage_values[0] (From Process) is not nan)
+        if triage_values[0]==triage_values[0]:
+            triage_obs.append(
+                [triage_values[0], triage_values[1], None, float(triage_values[2]),
+                'Process to kick off repeated obs for different timings'])
     triage_obs_events = pd.DataFrame(triage_obs, columns=triage_events.columns)
 
     #Create a dataframe of the inserted triage obs events to the original triage
@@ -156,6 +161,50 @@ def add_obs_repeat_splits(pathway_definition, obs_splits):
     pathway_definition = pd.concat([triage_obs_events, new_links, pathway_definition])
 
     return pathway_definition
+
+
+
+def create_process_recurrence(obs_splits):
+    """
+    Args:
+        obs_splits (list[tuple]): list of the trigger processes and recurrent
+        processes
+
+    Returns:
+        process_recurrece_triggers (pd.DataFrame): process recurrence triggers
+        output
+        process_recurrence (pd.DataFrame): process recurrence output.
+    """
+    #Create the process recurrence triggers output.
+    process_recurrence_triggers = pd.DataFrame(
+                                  [lst[1:] for lst in obs_splits],
+                                  columns=['Trigger Process (In Pathway)',
+                                           'Probability (%)',
+                                           'Recurrent Process (Not In Pathway)'])
+    #As we've added in kick-off events in the pathway to do probability splits,
+    #all probabilites here are 100%
+    process_recurrence_triggers['Probability'] = 100
+    process_recurrence_triggers['Notes'] = np.nan
+    #Rearrange columns
+    process_recurrence_triggers = process_recurrence_triggers[
+                                  ['Trigger Process (In Pathway)', 
+                                   'Recurrent Process (Not In Pathway)',
+                                   'Probability (%)', 'Notes']].copy()
+    
+    #Create the process recurrence output.
+    process_recurrence = pd.DataFrame(
+               process_recurrence_triggers['Recurrent Process (Not In Pathway)']
+               .rename('Recurrent Process'))
+    process_recurrence['Recurrence Mean'] = (process_recurrence['Recurrent Process']
+                                             .str.extract(r'(\d+)').astype(int))
+    process_recurrence['StdDev'] = (round(0.1
+                                        * process_recurrence['Recurrence Mean'])
+                                        .astype(int))
+    process_recurrence['Min'] = 5
+    process_recurrence['Max'] = np.nan
+    process_recurrence['Notes'] = np.nan
+    
+    return process_recurrence_triggers, process_recurrence
 
 
 def get_dfg(event_data, export_event_log_csv,
@@ -193,6 +242,42 @@ def get_dfg(event_data, export_event_log_csv,
 
     dfg = dfg_discovery.apply(log)
     return dfg
+
+def pathway_wait_in_place(pathway_definitions, pathways_wait_in_place,
+                          recurrent_processes):
+    """
+    Args:
+        pathway_definition (pd.DataFrame): Pathway definitions dataframe.
+        pathways_wait_in_place (list): list of the pathways that should be wait
+        in place.
+        recurrent_processes (list): list of all recurrent processes so we can
+        add any on wait in place pathways.
+    Returns:
+        wait_in_place (pd.DataFrame): wait in place dataframe.
+
+    """
+    #Filter the from and to processess to only those in a wait in place pathway.
+    #Get a list of these with no duplicates
+    from_col = (pathway_definitions
+                .loc[pathway_definitions['From Process']
+                     .str.contains('|'.join(pathways_wait_in_place)),
+                     'From Process'].drop_duplicates().dropna().to_list())
+    to_col = (pathway_definitions
+                .loc[pathway_definitions['To Process']
+                     .str.contains('|'.join(pathways_wait_in_place)),
+                     'From Process'].drop_duplicates().dropna().to_list())
+    wip_processes = from_col + to_col
+    #Add the list of repeated processes to the wip list
+    wip_processes += [process for process in recurrent_processes
+                      if any([pathway in process
+                              for pathway in pathways_wait_in_place])]
+    #Create and return wait in place dataframe
+    wip_processes = list(set(wip_processes))
+    wait_in_place = pd.DataFrame(
+        {'Processes which Wait in Place (Pathway or Recurrent)':wip_processes,
+         'Notes' : [np.nan] * len(wip_processes)})
+    return wait_in_place
+
 
 
 def output_transition_viz(pathway_definition, filepath, name):
@@ -317,23 +402,32 @@ def generate_and_output_dfg_and_pathway_definition(directory_path, events_data,
                                      events_data, include_spawn_end_events)
     pathway_definitions_unfiltered = add_obs_repeat_splits(pathway_definitions_unfiltered,
                                                            obs_splits)
+    #Create process recurrence outputs
+    process_recurrence_triggers, process_recurrence = create_process_recurrence(obs_splits)
+    process_recurrence_triggers.to_csv(str(filepath / "Process Recurrence Triggers.csv"), index=False)
+    process_recurrence.to_csv(str(filepath / "Process Recurrence.csv"), index=False)
 
     #if post processing functions, apply these, then save the pathway
     # definitions to csv and output the transitions plot.
     if post_processing_functions_of_pathway_definitions is not None:
-
-        filtered_pathway_definitions = post_processing_functions_of_pathway_definitions(
+        #Filter the pathway definition
+        pathway_definitions = post_processing_functions_of_pathway_definitions(
                                        pathway_definitions_unfiltered)
-        filtered_pathway_definitions.to_csv(filepath / "Pathway Definition.csv",
+        pathway_definitions.to_csv(str(filepath / "Pathway Definition.csv"),
                                             index=None)
-        output_transition_viz(filtered_pathway_definitions, filepath,
-                              directory_path)
+        output_transition_viz(pathway_definitions, filepath, directory_path)
 
     else:
-        pathway_definitions_unfiltered.to_csv(filepath/"Pathway Definition.csv",
-                                              index=False)
-        output_transition_viz(pathway_definitions_unfiltered, filepath,
-                              directory_path)
+        pathway_definitions = pathway_definitions_unfiltered.copy()
+        pathway_definitions.to_csv(filepath/"Pathway Definition.csv",
+                                   index=False)
+        output_transition_viz(pathway_definitions, filepath, directory_path)
+
+    #Create and save process wait in place.
+    wait_in_place = pathway_wait_in_place(pathway_definitions,
+                                          pathways_wait_in_place,
+                                          [lst[3] for lst in obs_splits])
+    wait_in_place.to_csv(filepath/"Process Wait in Place.csv", index=False)
 
     #Create log files and dfgs
     if split_column is None:
@@ -345,7 +439,6 @@ def generate_and_output_dfg_and_pathway_definition(directory_path, events_data,
         logs = {}
         for i in events_data[split_column].unique():
             split_filepath = filepath / i
- #           split_filepath.mkdir(exist_ok=True, parents=True)
             logs[f"{i}"] = get_dfg(events_data.loc[events_data[split_column]
                                                    == i].copy(),
                                    export_event_log_csv,
