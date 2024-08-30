@@ -43,12 +43,12 @@ def cleanse_and_transform_data(events_quality, adm_status_raw, obs_quality,
     events_quality = cleaning.merge_data(events_quality, diagnostics_quality,
                                          obs_quality)
 
-    events_quality = cleaning.remove_excluded_events_and_locations(
-                     events_quality, excluded_event_names, locations_to_drop)
-
     events_quality = cleaning.set_location_for_ambulance_arrival(events_quality)
 
     events_quality = cleaning.forward_fill_on_locations(events_quality)
+
+    events_quality = cleaning.remove_excluded_events_and_locations(
+                     events_quality, excluded_event_names, locations_to_drop)
 
     events_quality = cleaning.mapping_of_natural_order(events_quality,
                                                     natural_order_for_processes)
