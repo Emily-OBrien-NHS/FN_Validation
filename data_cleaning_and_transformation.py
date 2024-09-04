@@ -158,6 +158,26 @@ def remove_events_after_discharged(events_quality):
                                                         "after_target_event"]))
     return events_quality
 
+def remove_senior_review_if_seen_by(events_quality):
+    """
+    Args:
+        events_quality (Pandas.DataFrame): Clensed events file
+    Returns:
+        events_quality (Pandas.DataFrame): events data with duplicated senior reviews removed
+    """
+    #Where two events of seen by and senior reviewed, with the same time/staff/
+    #location, remove the senior reviewed (works because alphabetically,
+    #this comes after seen by).
+    rem = (events_quality.loc[events_quality['EventName']
+                              .isin(['Seen By Clinician/Treated', 'Senior Reviewed'])]
+                              .sort_values(by=['EventName'])
+                              .duplicated(subset=['VisitId', 'EventTime',
+                                                  'EventStaffId',
+                                                  'EventLocation'],
+                                                  keep='first'))
+    #Remove these events
+    events_quality = events_quality.loc[~events_quality.index.isin(rem[rem].index)].copy()
+    return events_quality
 
 def augmenting_admittance_data(adm_status_raw, events_quality):
 
@@ -382,9 +402,6 @@ def map_locations_to_triage_category_and_create_pathway_column(events_quality,
         events_quality (pd.DataFrame): clensed events quality dataframe.
         locations_pathway_map (dict[str, str]): dictionary to map locations to
         their pathway.
-        natural_order_for_processes (dict[str, int]): dictionary to map 
-        processes to their order.
-
     Returns:
         pd.DataFrame: clensed events quality dataframe woth pathway addded.
     """

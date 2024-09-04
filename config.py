@@ -49,7 +49,7 @@ export_event_log_csv = False
 export_log_to_csv_after_using_log_converter = False
 keep_last_location = True
 include_spawn_end_events = False
-plots = False
+plots = True
 
 #######################LISTS/DICTS#######################
 event_names_to_exclude_for_repetition = ["Triaged", "Discharged", "Booked In",
@@ -70,7 +70,7 @@ admitted_map = {'Admitted - MAU':'Admitted',
                 'Admitted - Other Derriford Ward':'Admitted',
                 'Admitted - SDEC':'Admitted'}
 pathways_wait_in_place = ["Majors", "Resus"]
-excluded_event_names = ["Nursing Assessment", "Clinically Ready to Proceed"]
+excluded_event_names = ["Clinically Ready to Proceed"]
 locations_to_drop = ["Paediatrics", "Plym"]
 pathways = ["Majors", "Ambulatory", "Minors", "Resus"]
 
@@ -90,7 +90,7 @@ natural_order_for_processes = { SPAWN: 0,
                                 "Ambulance Arrival": 1,
                                 "Booked In": 2,
                                 "Triaged": 3,
-                                "Nursing Assessment": 4,
+                                "Nurse Assessment": 4,
                                 "Seen By Clinician/Treated": 5,
                                 "Clerked": 6,
                                 "Observations": 7,

@@ -18,7 +18,8 @@ if __name__ == "__main__":
     path_to_read_data = Path(r"./Events Data")
     # ---------------------- Read in and clense raw data
     # ---------------------- Events data
-    events_raw = load_data("FN_Events.csv")
+    #events_raw = load_data("FN_Events.csv")
+    events_raw = load_data('FN_NursingAssessmentsData.csv')
     events_quality = cleaning.drop_duplicates_and_anomaly_times_events_data(
         events_raw, config.repeat_time_threshold,
         config.remove_duplicate_staffid, config.remove_duplicate_location)

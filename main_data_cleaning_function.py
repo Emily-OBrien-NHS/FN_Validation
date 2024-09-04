@@ -36,6 +36,8 @@ def cleanse_and_transform_data(events_quality, adm_status_raw, obs_quality,
     
     events_quality = cleaning.remove_events_after_discharged(events_quality)
 
+    events_quality = cleaning.remove_senior_review_if_seen_by(events_quality)
+    
     if adm_status_raw is not None:
         events_quality = cleaning.augmenting_admittance_data(adm_status_raw,
                                                              events_quality)

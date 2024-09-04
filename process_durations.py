@@ -73,12 +73,27 @@ def generate_and_output_histogram_and_process_durations(directory_path,
         for filter in filterFuncs:
             processed_events = filter(processed_events)
 
+    #Get the average number of Treatment repeats and multiply the treatment
+    #time by this to create 'mega treatment' event.
+    treat_repeat = (processed_events.loc[processed_events['EventName'] == 'Treatment']
+                    .groupby(['Pathway', 'VisitId'], as_index=False)['EventTime']
+                    .count().groupby('Pathway')['EventTime'].mean()).rename('TreatRepeat')
+    processed_events = processed_events.merge(treat_repeat, on='Pathway')
+    processed_events['diffMinutes'] = np.where(
+                                      processed_events['EventName'] == 'Treatment',
+                                      processed_events['diffMinutes']
+                                       * processed_events['TreatRepeat'],
+                                      processed_events['diffMinutes'])
+    processed_events = processed_events.drop('TreatRepeat', axis=1)
+
     #Log normal distributions.
     generate_and_output_process_durations_log_normal(plot_folder_directory_path,
                                                     processed_events, processes)
     if plots:
         for group, data in processed_events.groupby(groupby_column)["diffMinutes"]:
             #create a histogram for the data in each event.
+            if 'Treatment' in group:
+                data = data *1.3
             title = str(group).replace("_", "")
             ax = data.plot.hist(bins=100, figsize=(12, 8))
             ax.grid(True, which="both", linestyle="--", linewidth=0.5)
