@@ -1,8 +1,8 @@
-#Frazer Nash Alaysis, Definition and Validation Code
+# Frazer Nash Alaysis, Definition and Validation Code
 
 Code to create pathway definition and other outputs from events file and perform some validation.
 
-##Files
+## Files
 
 **main.py** - The main file to run with inputted events data to create the pathway definition and other input files using various filtering/settings. Option to include diagnostic, obs and admission data.
 
