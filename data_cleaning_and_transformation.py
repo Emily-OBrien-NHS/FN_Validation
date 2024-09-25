@@ -270,6 +270,29 @@ def map_locations_and_create_pathway_column(events_quality,
                                        + " (" + events_quality["Pathway"] + ")")
     return events_quality
 
+def record_and_remove_treat_repeat(events_quality):
+    #Get the average number of treatments by pathway
+    treat_repeat = ((events_quality
+                     .loc[events_quality['EventName'] == 'Treatment']
+                     .groupby(['Pathway', 'VisitId'], as_index=False)
+                      ['EventTime'].count()
+                      .groupby('Pathway')['EventTime'].mean())
+                     .rename('TreatRepeat'))
+    #Keep only the timestamp of the patient's first treatment. reset index
+    #to deal with duplicated index
+    events_quality = events_quality.reset_index(drop=True)
+    #Get indicies of the first treatment
+    first_treatment = (events_quality
+                       .loc[events_quality['EventName'] == 'Treatment']
+                       .groupby('VisitId')['EventName'].idxmax().tolist())
+    #Get indicies of non treatment events to keep as well
+    non_treatment = events_quality['EventName'] != 'Treatment'
+    non_treatment = non_treatment[non_treatment].index.tolist()
+    #Filter out repeated events
+    events_quality = events_quality.loc[non_treatment + first_treatment].copy()
+    return treat_repeat, events_quality
+
+
 ################################################################################
 #----------------------------main cleaning function----------------------------#
 ################################################################################
@@ -323,4 +346,6 @@ def main_cleanse_and_transform_data(events_quality, adm_status_raw, obs_quality,
     events_quality = map_locations_and_create_pathway_column(events_quality,
                                                         locations_pathway_map)
     events_quality = sort_events(events_quality)
-    return events_quality
+    treat_repeat, events_quality = record_and_remove_treat_repeat(events_quality)
+    events_quality = sort_events(events_quality)
+    return events_quality, treat_repeat

@@ -105,7 +105,7 @@ def generate_and_output_process_durations_log_normal(directory_path,
 ################################################################################
 
 def main_generate_histogram_and_process_durations(directory_path,
-    processed_events, groupby_column, output_path, plots, filterFuncs=None):
+    processed_events, treat_repeat, groupby_column, output_path, plots, filterFuncs=None):
     #Main function to fit lognormals, plot distributions if required and output
     #the process durations input file.
     #----
@@ -116,14 +116,8 @@ def main_generate_histogram_and_process_durations(directory_path,
     if filterFuncs is not None:
         for filter in filterFuncs:
             processed_events = filter(processed_events)
-    #Get the average number of Treatment repeats and multiply the treatment
-    #time by this to create 'mega treatment' event.
-    treat_repeat = ((processed_events
-                     .loc[processed_events['EventName'] == 'Treatment']
-                     .groupby(['Pathway', 'VisitId'], as_index=False)
-                      ['EventTime'].count()
-                      .groupby('Pathway')['EventTime'].mean())
-                     .rename('TreatRepeat'))
+    #multiply the treatment time by the average number of treatment events per
+    #patient to create a 'mega treatment' event.
     processed_events = processed_events.merge(treat_repeat, on='Pathway')
     processed_events['diffMinutes'] = (
         np.where(processed_events['EventName'] == 'Treatment',

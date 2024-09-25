@@ -45,15 +45,17 @@ if __name__ == "__main__":
         adm_status_raw = pd.read_csv(f"{input_path}/{"FN_AdmissionStatus.csv"}")
 
     # ---------------------- Combine and Clense data
-    events_quality = cleaning.main_cleanse_and_transform_data(
-                     events_quality, adm_status_raw, obs_quality,
-                     diagnostics_quality,
-                     config.event_names_to_exclude_for_repetition,
-                     config.excluded_event_names, config.locations_to_drop,
-                     config.natural_order_for_processes,
-                     config.include_spawn_end_events,
-                     config.locations_pathway_map, config.keep_last_location,
-                     config.admitted_map)
+    events_quality, treat_repeat = cleaning.main_cleanse_and_transform_data(
+                                   events_quality, adm_status_raw, obs_quality,
+                                   diagnostics_quality,
+                                   config.event_names_to_exclude_for_repetition,
+                                   config.excluded_event_names,
+                                   config.locations_to_drop,
+                                   config.natural_order_for_processes,
+                                   config.include_spawn_end_events,
+                                   config.locations_pathway_map,
+                                   config.keep_last_location,
+                                   config.admitted_map)
 
 ################################################################################
 #-----------------------------Pathway Definitions------------------------------#
@@ -111,13 +113,15 @@ if __name__ == "__main__":
     # ------------------------ durations for different filterings/scenarios
     analysis_name = "Max threshold 2 hours and including 100 percentile"
     durations.main_generate_histogram_and_process_durations(analysis_name,
-              event_diffs, "Event (Pathway)", output_path, config.plots,
+              event_diffs, treat_repeat, "Event (Pathway)", output_path,
+              config.plots,
               [durations.within_threshold_diff(120)])
     
     # ------------------------
     analysis_name = "Max threshold 2 hours, 100 perc, between 8am and 10pm"
     durations.main_generate_histogram_and_process_durations(analysis_name,
-              event_diffs, "Event (Pathway)", output_path, config.plots,
+              event_diffs, treat_repeat, "Event (Pathway)", output_path,
+              config.plots,
               [durations.within_threshold_diff(120),
                durations.only_daytime_events])
     
@@ -125,7 +129,8 @@ if __name__ == "__main__":
     analysis_name = "Max threshold 14 hours,"\
                     f" and {int(config.quantile_threshold*100)} percentile"
     durations.main_generate_histogram_and_process_durations(analysis_name,
-              event_diffs, "Event (Pathway)", output_path, config.plots,
+              event_diffs, treat_repeat, "Event (Pathway)", output_path,
+              config.plots,
               [durations.within_threshold_diff(840),
                durations.within_diff_quantile(config.quantile_threshold)])
     
@@ -134,7 +139,8 @@ if __name__ == "__main__":
                     f"{int(config.quantile_threshold*100)} perc,"\
                     " between 8am and 10pm"
     durations.main_generate_histogram_and_process_durations(analysis_name,
-              event_diffs, "Event (Pathway)", output_path, config.plots,
+              event_diffs, treat_repeat, "Event (Pathway)", output_path,
+              config.plots,
               [durations.within_threshold_diff(840),
                durations.within_diff_quantile(config.quantile_threshold),
                durations.only_daytime_events])
