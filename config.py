@@ -9,8 +9,8 @@ repeat_time_threshold = 10
 #############################BOOLS###############################
 remove_duplicate_staffid = False
 remove_duplicate_location = False
-include_obs_data = False
-include_diag_data = False
+include_obs_data = True
+include_diag_data = True
 include_admission_data = True
 export_event_log_csv = False
 export_log_to_csv_after_using_log_converter = False

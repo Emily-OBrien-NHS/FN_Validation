@@ -107,12 +107,12 @@ def remove_repeats_of_events_that_should_not_be_repeated(events_quality,
 def remove_events_after_discharged(events_quality):
     #Remove any events that happen after discharge
     events_quality = events_quality.sort_values(by=["VisitId", "EventTime"])
-    events_quality["target_event"] = events_quality["EventName"] == "Discharged"
+    events_quality["target_event"] = ((events_quality["EventName"] == "Discharged")
+                                      | (events_quality['EventName'].str.contains('Admitted')))
     events_quality["after_target_event"] = (events_quality.groupby("VisitId")
                                         ["target_event"].cumsum().astype(bool))
-    events_quality = (events_quality
-                      .loc[~(events_quality["after_target_event"])
-                           | (events_quality["target_event"])].copy()
+    events_quality = (events_quality.loc[~(events_quality["after_target_event"])
+                                    | (events_quality["target_event"])].copy()
                       .drop(columns=["target_event", "after_target_event"]))
     return events_quality
 
@@ -132,20 +132,20 @@ def remove_senior_review_if_seen_by(events_quality):
                                          .isin(rem[rem].index)].copy())
     return events_quality
 
-def augmenting_admittance_data(adm_status_raw, events_quality):
-    #Function to add in admitted data if provided.
-    adm_status_quality = adm_status_raw.rename(columns={"AttendanceID"
-                                                        : "VisitId"})
-    adm_status_quality = (adm_status_quality
-                          .loc[adm_status_quality["Adm"] != "Non-Admitted",
-                          ["VisitId", "Adm"]].copy())
-    events_quality = events_quality.merge(adm_status_quality, on="VisitId",
-                                          how="left")
-    events_quality.loc[(events_quality["EventName"] == "Discharged")
-                       & (~pd.isnull(events_quality["Adm"])),
-                       "EventName"] = events_quality["Adm"]
-    events_quality = events_quality.drop(["Adm"], axis=1)
-    return events_quality
+# def augmenting_admittance_data(adm_status_raw, events_quality):
+#     #Function to add in admitted data if provided.
+#     adm_status_quality = adm_status_raw.rename(columns={"AttendanceID"
+#                                                         : "VisitId"})
+#     adm_status_quality = (adm_status_quality
+#                           .loc[adm_status_quality["Adm"] != "Non-Admitted",
+#                           ["VisitId", "Adm"]].copy())
+#     events_quality = events_quality.merge(adm_status_quality, on="VisitId",
+#                                           how="left")
+#     events_quality.loc[(events_quality["EventName"] == "Discharged")
+#                        & (~pd.isnull(events_quality["Adm"])),
+#                        "EventName"] = events_quality["Adm"]
+#     events_quality = events_quality.drop(["Adm"], axis=1)
+#     return events_quality
 
 def merge_data(events_quality, diagnostics_quality, obs_quality):
     #Function to add in obs and diagnostics data if the data is provided.
@@ -314,18 +314,18 @@ def main_cleanse_and_transform_data(events_quality, adm_status_raw, obs_quality,
     events_quality = remove_events_after_discharged(events_quality)
     events_quality = remove_senior_review_if_seen_by(events_quality)
     #Add admissions, diagnosis and obs data if required
-    if adm_status_raw is not None:
-        events_quality = augmenting_admittance_data(adm_status_raw,
-                                                    events_quality)
-    events_quality = merge_data(events_quality, diagnostics_quality,
-                                         obs_quality)
+    # if adm_status_raw is not None:
+    #     events_quality = augmenting_admittance_data(adm_status_raw,
+    #                                                 events_quality)
+    # events_quality = merge_data(events_quality, diagnostics_quality,
+    #                                      obs_quality)
     #fill in missing locations and remove locations/enets for removal
     events_quality = set_location_for_ambulance_arrival(events_quality)
     events_quality = forward_fill_on_locations(events_quality)
     events_quality = remove_excluded_events_and_locations(events_quality,
                                                           excluded_event_names,
                                                           locations_to_drop)
-    #Sort events data and add in walkin and wait for bed events   
+    #Sort events data and add in walkin and wait for bed events
     events_quality = mapping_of_natural_order(events_quality,
                                               natural_order_for_processes)
     events_quality = sort_events(events_quality)
