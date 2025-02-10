@@ -51,38 +51,38 @@ def drop_duplicates_and_anomaly_times_events_data(events_raw,
                                                'EventLocation']].copy()
     return events_quality
 
-def rename_columns_and_collapse_data_diagnostics(
-        collapse_diagnostics_rows_within_time_of, diagnostics_raw):
-    #Function to rename columns and collapse similar events in a short time
-    #frame to one event for diagnostics data.
-    #----
-    diagnostics_quality = diagnostics_raw[["VisitID", "Request DateTime",
-                                           "ItemMasterCategory"]].copy()
-    diagnostics_quality = diagnostics_quality.rename(columns={
-                                            "ItemMasterCategory": "EventName",
-                                            "Request DateTime": "EventTime",
-                                            "VisitID": "VisitId"})
-    diagnostics_quality["EventTime"] = pd.to_datetime(
-                    diagnostics_quality["EventTime"], format="%d/%m/%Y %H:%M")
-    # collapse similar rows within a short time for a patient to one row
-    mask = (diagnostics_quality.sort_values(by=["VisitId", "EventTime"])
-            .groupby("VisitId")["EventTime"].diff()
-            .lt(collapse_diagnostics_rows_within_time_of).sort_index())
-    # index the df with this mask to remove the duplicates
-    diagnostics_quality = diagnostics_quality.loc[~mask].copy()
-    return diagnostics_quality
+# def rename_columns_and_collapse_data_diagnostics(
+#         collapse_diagnostics_rows_within_time_of, diagnostics_raw):
+#     #Function to rename columns and collapse similar events in a short time
+#     #frame to one event for diagnostics data.
+#     #----
+#     diagnostics_quality = diagnostics_raw[["VisitID", "Request DateTime",
+#                                            "ItemMasterCategory"]].copy()
+#     diagnostics_quality = diagnostics_quality.rename(columns={
+#                                             "ItemMasterCategory": "EventName",
+#                                             "Request DateTime": "EventTime",
+#                                             "VisitID": "VisitId"})
+#     diagnostics_quality["EventTime"] = pd.to_datetime(
+#                     diagnostics_quality["EventTime"], format="%d/%m/%Y %H:%M")
+#     # collapse similar rows within a short time for a patient to one row
+#     mask = (diagnostics_quality.sort_values(by=["VisitId", "EventTime"])
+#             .groupby("VisitId")["EventTime"].diff()
+#             .lt(collapse_diagnostics_rows_within_time_of).sort_index())
+#     # index the df with this mask to remove the duplicates
+#     diagnostics_quality = diagnostics_quality.loc[~mask].copy()
+#     return diagnostics_quality
 
-def rename_columns_and_change_events_to_obs(obs_raw):
-    #Function to format obs data
-    #----
-    obs_quality = obs_raw.copy()
-    obs_quality = obs_raw.rename(columns={"ChartType": "EventName",
-                                          "ChartDateTime": "EventTime",
-                                          "VisitID": "VisitId"})
-    obs_quality["EventTime"] = pd.to_datetime(obs_quality["EventTime"],
-                                              format="%d/%m/%Y %H:%M")
-    obs_quality["EventName"] = "Observations"
-    return obs_quality
+# def rename_columns_and_change_events_to_obs(obs_raw):
+#     #Function to format obs data
+#     #----
+#     obs_quality = obs_raw.copy()
+#     obs_quality = obs_raw.rename(columns={"ChartType": "EventName",
+#                                           "ChartDateTime": "EventTime",
+#                                           "VisitID": "VisitId"})
+#     obs_quality["EventTime"] = pd.to_datetime(obs_quality["EventTime"],
+#                                               format="%d/%m/%Y %H:%M")
+#     obs_quality["EventName"] = "Observations"
+#     return obs_quality
 
 ################################################################################
 #---------------Cleaning functions used in main cleaning function--------------#
@@ -147,15 +147,15 @@ def remove_senior_review_if_seen_by(events_quality):
 #     events_quality = events_quality.drop(["Adm"], axis=1)
 #     return events_quality
 
-def merge_data(events_quality, diagnostics_quality, obs_quality):
-    #Function to add in obs and diagnostics data if the data is provided.
-    if obs_quality is not None:
-        events_quality = pd.concat([events_quality, obs_quality])
-    if diagnostics_quality is not None:
-        events_quality = pd.concat([events_quality, diagnostics_quality])
-    events_quality["EventTime"] = pd.to_datetime(events_quality["EventTime"],
-                                                  format="%d/%m/%Y %H:%M")
-    return events_quality
+# def merge_data(events_quality, diagnostics_quality, obs_quality):
+#     #Function to add in obs and diagnostics data if the data is provided.
+#     if obs_quality is not None:
+#         events_quality = pd.concat([events_quality, obs_quality])
+#     if diagnostics_quality is not None:
+#         events_quality = pd.concat([events_quality, diagnostics_quality])
+#     events_quality["EventTime"] = pd.to_datetime(events_quality["EventTime"],
+#                                                   format="%d/%m/%Y %H:%M")
+#     return events_quality
 
 def set_location_for_ambulance_arrival(events_quality):
     #Function to add Ambulance location for Ambulance Arrivals
@@ -192,6 +192,39 @@ def mapping_of_natural_order(events_quality, natural_order_for_processes):
     events_quality["natural_order"] = (events_quality["EventName"]
                                        .map(natural_order_for_processes))
     return events_quality
+
+def artificially_change_imaging_time(events_quality, natural_order_for_processes):
+    #Function to artificially insert imaging after the latest event with a
+    #natural order before imaging
+    #----
+    #remove e
+    #reset index as data has been sorted.
+    events_quality = events_quality.reset_index(drop=True)
+    #Find the natural order number of the first imaging step and filter data to
+    #all events that occur before that.
+    min_natural_order = natural_order_for_processes["Radiology"]
+    before_events = events_quality.loc[events_quality["natural_order"]
+                                < min_natural_order, ['VisitId', 'EventTime']]
+    #Get the latest event time of an event before we want the imaging events to
+    # occur.
+    max_before_event = before_events.groupby(['VisitId']).idxmax()
+    max_before_eventtime = events_quality.loc[
+                                max_before_event['EventTime'].values.tolist(),
+                                ['VisitId', 'EventTime']]
+    #add 1 seccond on to this event time, merge back onto events_quality and
+    #change imaging event time to be the max before event datetime + 1 second
+    #to try and ensure imaging happens in the correct place.
+    max_before_eventtime['EventTime'] = (max_before_eventtime['EventTime']
+                                         + pd.to_timedelta(1, unit='s'))
+    events_quality = events_quality.merge(max_before_eventtime, on='VisitId',
+                                          how='left', suffixes=['', 'Imaging'])
+    events_quality.loc[events_quality['EventName']
+                       .isin(["Radiology", "CT", "MRI", "Ultrasound"]),
+                       'EventTime'] = events_quality['EventTimeImaging']
+    #drop column used for logic
+    events_quality = events_quality.drop('EventTimeImaging', axis=1)
+    return events_quality
+
 
 def add_walk_in_for_non_ambulance_arrivals(events_quality):
     #Function to add in walkin arrivals for any non-ambulance arrival.
@@ -319,7 +352,7 @@ def main_cleanse_and_transform_data(events_quality, adm_status_raw, obs_quality,
     #                                                 events_quality)
     # events_quality = merge_data(events_quality, diagnostics_quality,
     #                                      obs_quality)
-    #fill in missing locations and remove locations/enets for removal
+    #fill in missing locations and remove locations/events for removal
     events_quality = set_location_for_ambulance_arrival(events_quality)
     events_quality = forward_fill_on_locations(events_quality)
     events_quality = remove_excluded_events_and_locations(events_quality,
@@ -329,6 +362,8 @@ def main_cleanse_and_transform_data(events_quality, adm_status_raw, obs_quality,
     events_quality = mapping_of_natural_order(events_quality,
                                               natural_order_for_processes)
     events_quality = sort_events(events_quality)
+    #events_quality = artificially_change_imaging_time(events_quality,
+     #                                                 natural_order_for_processes)
     events_quality = add_walk_in_for_non_ambulance_arrivals(events_quality)
     events_quality = sort_events(events_quality)
     events_quality = add_wait_for_beds_for_admitted_patients(events_quality,
@@ -347,5 +382,7 @@ def main_cleanse_and_transform_data(events_quality, adm_status_raw, obs_quality,
                                                         locations_pathway_map)
     events_quality = sort_events(events_quality)
     treat_repeat, events_quality = record_and_remove_treat_repeat(events_quality)
+    events_quality = artificially_change_imaging_time(events_quality,
+                                                      natural_order_for_processes)
     events_quality = sort_events(events_quality)
     return events_quality, treat_repeat

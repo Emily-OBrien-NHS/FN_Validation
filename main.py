@@ -15,12 +15,17 @@ if __name__ == "__main__":
 ################################################################################
 #-------------------------Read in and clense raw data--------------------------#
 ################################################################################
-    # ---------------------- Database Engine
+    start_date = '01-APR-2024 00:00:00'
+    end_date = '30-APR-2024 23:59:59'
+    # ---------------------- Database Engines
     realtime_engine = create_engine('mssql+pyodbc://@dwrealtime/RealTimeReporting?'\
                            'trusted_connection=yes&driver=ODBC+Driver+17'\
                                '+for+SQL+Server')
+    cl3_engine = create_engine('mssql+pyodbc://@cl3-data/DataWarehouse?'\
+                           'trusted_connection=yes&driver=ODBC+Driver+17'\
+                               '+for+SQL+Server')
     # ---------------------- Events data
-    events_query = """SET NOCOUNT ON
+    events_query = f"""SET NOCOUNT ON
                     -------CONNECT TO DWREALTIME
 
                     -------First get attendance-level data
@@ -32,7 +37,7 @@ if __name__ == "__main__":
                             ,DischargeDateTime
                     into #att
                     from [cl3-data].DataWarehouse.ed.vw_EDAttendance
-                    where dischargedatetime between '01-APR-2024 00:00:00' and '30-APR-2024 23:59:59'
+                    where dischargedatetime between '{start_date}' and '{end_date}'
 
                     ----Use location table to get all locations for these attendances
                     select NCAttendanceId, LocationDescription, LocationSubType, LocationOrder, StartDateTime, EndDateTime
@@ -286,9 +291,89 @@ if __name__ == "__main__":
                     --inner join #att att on att.AttendanceID = nerve.NCAttendanceId
                     """
     events_raw = pd.read_sql(events_query, realtime_engine)
+    # ---------------------- Imaging data
+    imaging_query = f"""SET NOCOUNT ON
+    declare @startdttm as datetime
+ declare @enddttm as datetime
 
+ set @startdttm = '{start_date}'
+ set @enddttm = '{end_date}'
+
+--Get CRiS Reports
+  select EventKey, HospitalNumber,
+  case when max(SubModality) = 'Radiology' then max(isnull(EventDateTime,'1900-01-01')) else max(isnull(VerifiedDateTime,'1900-01-01')) end as ReportedDateTime,--If XR, use event time, otherwise use report verified
+  max(SubModality) as SubModality
+  into  #cris_rep
+  from [DataWarehouse].[Imaging].[vw_Report]
+  where SubModality in ('CT','MRI','Radiology','Ultrasound') --Only get imaging scans
+  and PatientTypeCode in ('C','J') --only ED patients
+  and CreationDateTime between @startdttm and @enddttm
+  and SiteCode = 'RK950' --Don't include MIU/UTC/Community scans
+  group by EventKey, HospitalNumber
+
+
+--GET CRIS IMAGING DATA
+  select cris.EventKey, cris.HospitalNumber, min(isnull(CreationDateTime,'2099-01-01')) as OrderEnteredDateTime,
+  case when (max(isnull(cris_rep.ReportedDateTime,'1900-01-01')) is NULL or max(isnull(cris_rep.ReportedDateTime,'1900-01-01')) = '1900-01-01') and max(cris.SubModality) = 'Radiology' then max(isnull(cris.EventDateTime,'1900-01-01')) else max(isnull(cris_rep.ReportedDateTime,'1900-01-01')) end as ResultsAvailableDateTime,
+  max(cris.SubModality) as TestName,
+  ItemMasterCategory = 'Imaging'
+  ,UrgencyCode = cris.UrgencyCode, Urgency = cris.Urgency
+  into #cris --drop table #cris
+  FROM [DataWarehouse].[Imaging].[vw_Activity] cris
+  --join reports
+  left join #cris_rep cris_rep on cris_rep.EventKey = cris.EventKey
+  where cris.SubModality in ('CT','MRI','Radiology','Ultrasound') --Only get imaging scans
+  and cris.StatusCode = 'ATP' --remove those who DNA/not performed
+  and cris.PatientTypeCode in ('C','J') --only ED patients
+  and cris.CreationDateTime between @startdttm and @enddttm
+  and SiteCode = 'RK950' --Don't include MIU/UTC/Community scans
+  group by cris.EventKey, cris.HospitalNumber,cris.UrgencyCode,cris.Urgency
+
+
+--Get temp ED data
+select nerve.NCAttendanceId
+              ,nerve.HospitalNumber
+              ,nerve.ArrivalDateTime
+			  ,nerve.DischargeDateTime
+              ,nerve.IsNewAttendance
+into #nerve
+from   DataWarehouse.ed.vw_EDAttendance nerve
+where   nerve.dischargedatetime between @startdttm and @enddttm
+and nerve.DischargeDateTime is not NULL
+
+
+
+---JOIN TEST REQUESTS TO ED ATTENDS 
+select nerve.NCAttendanceId AS VisitId         
+,nerve.ArrivalDateTime               
+,res.OrderEnteredDateTime AS EventTime
+,res.ResultsAvailableDateTime
+,res.TestName AS EventName
+from   #nerve nerve 
+inner   join #cris res on nerve.HospitalNumber=res.HospitalNumber   --inner join so we don't return patients with no tests 
+and           res.OrderEnteredDateTime between nerve.ArrivalDateTime and nerve.DischargeDateTime 
+where  nerve.IsNewAttendance = 'y'  
+and ResultsAvailableDateTime > '30-MAR-2024' ---exclude records with missing data
+group by nerve.NCAttendanceId               
+,nerve.ArrivalDateTime               
+,res.OrderEnteredDateTime  
+,res.ResultsAvailableDateTime
+,res.TestName
+
+
+    """
+    imaging_raw = pd.read_sql(imaging_query, cl3_engine)
+    # ---------------------- Close Connections
+    realtime_engine.dispose()
+    cl3_engine.dispose()
+    
     # ---------------------- Events data
-    #events_raw = pd.read_csv(f"{input_path}/{'FN_NursingAssessmentsData.csv'}")
+    #Add imaging data to events file
+    imaging_events = imaging_raw[["VisitId", "EventName"]].copy()
+    first_event_time = imaging_raw.groupby("VisitId", as_index=False)['EventTime'].min()
+    imaging_events = imaging_events.merge(first_event_time, on='VisitId', how='left')
+    events_raw = pd.concat([events_raw, imaging_events])
+    #drop duplicates and fix anomaly times
     events_quality = cleaning.drop_duplicates_and_anomaly_times_events_data(
                      events_raw, config.repeat_time_threshold,
                      config.remove_duplicate_staffid,
@@ -380,7 +465,8 @@ if __name__ == "__main__":
     # ------------------------ Calculate the duration of each event in the data
     event_diffs = durations.add_difference_in_minutes_to_durations(
                   events_quality, config.where_duration_should_be_0)
-    
+    event_diffs = durations.add_imaging_timings(event_diffs, imaging_raw)
+
     # ------------------------ Generate and output histograms and process
     # ------------------------ durations for different filterings/scenarios
     analysis_name = "Max threshold 2 hours and including 100 percentile"

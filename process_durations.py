@@ -3,6 +3,7 @@ import pandas as pd
 import scipy as sp
 import matplotlib.pyplot as plt
 import numpy as np
+import config
 
 ################################################################################
 #-------------------supporting process durations functions---------------------#
@@ -25,6 +26,23 @@ def add_difference_in_minutes_to_durations(events_quality,
     event_diffs.loc[event_diffs["EventName"].isin(where_duration_should_be_0)
                     & event_diffs["diffMinutes"].isna(), "diffMinutes"] = 0
     return event_diffs
+
+def add_imaging_timings(event_diffs, imaging_raw):
+    #Remove imaging data from the events file
+    event_diffs = event_diffs.loc[~event_diffs["EventName"]
+                                  .isin(config.imaging_events)].copy()
+    #Filter imaging to MRI and Ultrasound, and get their timings
+    image_times = imaging_raw.loc[imaging_raw["EventName"]
+                                  .isin(["MRI", "Ultrasound"])].copy()
+    image_times["diffMinutes"] = (pd.to_timedelta(
+        image_times["ResultsAvailableDateTime"] - image_times["EventTime"])
+        .dt.total_seconds() / 60)
+    image_times["Event (Pathway)"] = image_times["EventName"]
+    #Concat this back onto the events file
+    event_diffs = pd.concat([event_diffs,image_times[["VisitId", "EventTime",
+                            "EventName", "Event (Pathway)", "diffMinutes"]]])
+    return event_diffs
+
 
 def within_threshold_diff(max_diff_minutes_for_durations):
     def remove_data_under_certain_hours(dataframe):
@@ -58,7 +76,7 @@ def only_daytime_events(dataframe):
     eight_am_to_10_pm.index = dataframe["EventTime"]
     eight_am_to_10_pm = eight_am_to_10_pm.between_time("08:00:00", "20:00:00")
     result = dataframe.loc[dataframe["EventTime"]
-                           .isin(eight_am_to_10_pm.index)].copy()
+                            .isin(eight_am_to_10_pm.index)].copy()
     return result
 
 def generate_and_output_process_durations_log_normal(directory_path,
@@ -80,11 +98,20 @@ def generate_and_output_process_durations_log_normal(directory_path,
             sigma = shape
             mean = math.exp(mu + (0.5 * sigma**2))
             variance = (math.exp(sigma**2)-1) * math.exp((2*mu)+(sigma**2))
-            new_entries.append({"Event (Pathway)": str(process),
-                                "Mean": mean,
-                                "StdDev": math.sqrt(variance),
-                                "Min": min(data.values),
-                                "Max": max(data.values)})
+            if "(" in process:
+                new_entries.append({"Event (Pathway)": str(process),
+                                    "Mean": mean,
+                                    "StdDev": math.sqrt(variance),
+                                    "Min": min(data.values),
+                                    "Max": max(data.values)})
+            else:
+                #if pathway not in process, add this in
+                for pathway in ["Minors", "Ambulatory", "Majors", "Resus"]:
+                    new_entries.append({"Event (Pathway)": str(process) + "(" + pathway + ")",
+                                    "Mean": mean,
+                                    "StdDev": math.sqrt(variance),
+                                    "Min": min(data.values),
+                                    "Max": max(data.values)})
         elif process != "":
             #if no data, record empty parameters
             new_entries.append({"Event (Pathway)": process,
@@ -118,7 +145,7 @@ def main_generate_histogram_and_process_durations(directory_path,
             processed_events = filter(processed_events)
     #multiply the treatment time by the average number of treatment events per
     #patient to create a 'mega treatment' event.
-    processed_events = processed_events.merge(treat_repeat, on='Pathway')
+    processed_events = processed_events.merge(treat_repeat, on='Pathway', how='left')
     processed_events['diffMinutes'] = (
         np.where(processed_events['EventName'] == 'Treatment',
                  processed_events['diffMinutes']
