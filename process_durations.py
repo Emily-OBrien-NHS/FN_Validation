@@ -107,7 +107,7 @@ def generate_and_output_process_durations_log_normal(directory_path,
             else:
                 #if pathway not in process, add this in
                 for pathway in ["Minors", "Ambulatory", "Majors", "Resus"]:
-                    new_entries.append({"Event (Pathway)": str(process) + "(" + pathway + ")",
+                    new_entries.append({"Event (Pathway)": str(process) + " (" + pathway + ")",
                                     "Mean": mean,
                                     "StdDev": math.sqrt(variance),
                                     "Min": min(data.values),

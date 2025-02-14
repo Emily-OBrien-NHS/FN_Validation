@@ -25,7 +25,9 @@ event_names_to_exclude_for_repetition = ["Triaged", "Discharged", "Booked In",
                                          "Admitted - MAU", "Admitted - SDEC"]
 where_duration_should_be_0 = ["Wait for Bed", "Walk-In",
                               "Admitted - Other Derriford Ward",
-                              "Admitted - MAU", "Admitted - SDEC", "Discharged"]
+                              "Admitted - MAU", "Admitted - SDEC", "Discharged",
+                              "Triaged - Kickoff 60 min Obs",
+                              "Triaged - Kickoff 30 min Obs", "Spawn", "Removed"]
 imaging_events = ["Radiology", "CT", "MRI", "Ultrasound"]
 locations_pathway_map = {"Ambulance": "Majors",
                          "Ambulatory Cubicles": "Ambulatory",
