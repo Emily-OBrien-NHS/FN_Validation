@@ -471,7 +471,8 @@ for file in config.additional_filenames:
 config_variables = {name: value 
                     for name, value in vars(config).items() 
                     if not name.startswith('__')}
-config_variables = {'start_date':start_date, 'end_date':end_date} + config_variables
+#Add start and end date from queries to dict
+config_variables.update({'start_date':start_date, 'end_date':end_date})
 #Create string of variables and their values at run time
 output_str = ''
 for name, value in config_variables.items():
