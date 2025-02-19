@@ -1,37 +1,23 @@
-from utils import sort_events
-from config import WALK_IN, SPAWN, REMOVED, WAITING_FOR_BED, admitted_map
 import pandas as pd
 
-#-----------------------------------initial cleaning functions on raw data
+################################################################################
+#--------------------initial cleaning functions on raw data--------------------#
+################################################################################
+
 def drop_duplicates_and_anomaly_times_events_data(events_raw,
                                                   repeat_time_threshold,
                                                   remove_duplicate_staffid,
                                                   remove_duplicate_location):
-    """
-    Args:
-        events_raw (pd.DataFrame): raw events data frame.
-        repeat_time_threshold (int): the number of minutes that should be used
-        to filter out repeated events (e.g. two triage on the same patient
-        within n minutes is likely a duplicate and should be discounted).
-        remove_duplicate_staffid (bool): Flag to consider if duplicate events
-        (within n minutes) should be removed if done by the same staff member.
-        remove_duplicate_location (bool): Flag to consider if duplicate events
-        (within n minutes) should be removed if done in the same location.
-
-    Returns:
-        pd.DataFrame: version of events df with duplicates removed.
-    """
-
+    #Function to remove duplicates and anomoly time events data.
+    #----
     #Remove fully duplicated entries, format datetime column and remove
-    #any data from before 2018-04-01
+    #any data from before 2018-04-01 and missing data.
     events_quality = events_raw.copy().drop_duplicates()
     events_quality["EventTime"] = pd.to_datetime(events_quality["EventTime"],
                                                  format="%d/%m/%Y %H:%M")
     events_quality = events_quality.dropna(subset=["EventTime"])
-
-    events_quality = events_quality.loc[~(events_quality["EventTime"]
-                                        < pd.to_datetime("2018-04-01"))].copy()
-
+    events_quality = events_quality.loc[(events_quality["EventTime"]
+                                        >= pd.to_datetime("2018-04-01"))].copy()
     #Add diff column of the time between duplicate events for the same VisitId.
     #Fill in NaT with the threshold+1 so these don't get filtered out.
     events_quality = events_quality.sort_values(by=['VisitId', 'EventName',
@@ -43,15 +29,15 @@ def drop_duplicates_and_anomaly_times_events_data(events_raw,
     #Empty list of flag cols, populate if any of the flags are True
     flagcols = []
     if remove_duplicate_staffid:
-        events_quality['DuplicateStaffId'] = (events_quality['EventStaffId']
+        flag_col = 'DuplicateStaffId'
+        events_quality[flag_col] = (events_quality['EventStaffId']
                                     == events_quality['EventStaffId'].shift(1))
-        flagcols.append('DuplicateStaffId')
-
+        flagcols.append(flag_col)
     if remove_duplicate_location:
-        events_quality['DuplicateLocation'] = (events_quality['EventLocation']
+        flag_col = 'DuplicateLocation'
+        events_quality[flag_col] = (events_quality['EventLocation']
                                     == events_quality['EventLocation'].shift(1))
-        flagcols.append('DuplicateLocation')
-
+        flagcols.append(flag_col)
     #if there are flags set to true, add the filter for these into the mask to
     #drop duplicate events
     if flagcols:
@@ -59,341 +45,277 @@ def drop_duplicates_and_anomaly_times_events_data(events_raw,
                  & (events_quality[flagcols].all(axis=1)))
     else:
         mask = ~(events_quality['diff'] < repeat_time_threshold)
-
     #use mask to remove duplicate events within n minutes of each other
     events_quality = events_quality.loc[mask, ['VisitId', 'EventName',
                                                'EventTime', 'EventStaffId',
                                                'EventLocation']].copy()
     return events_quality
 
+################################################################################
+#---------------Cleaning functions used in main cleaning function--------------#
+################################################################################
 
-def rename_columns_and_collapse_data_diagnostics(
-        collapse_diagnostics_rows_within_time_of, diagnostics_raw):
-    """
-    Args:
-        collapse_diagnostics_rows_within_time_of (pd.Timedelta): time between
-        diagnostic event times to remove duplicates within n minutes.
-        diagnostics_raw (pd.DataFrame): raw diagnostics data frame.
+def sort_events(events):
+    #Function to sort clensed events dataframe (used several times)
+    events = events.sort_values(by=["VisitId", "EventTime", "natural_order"])
+    return events
 
-    Returns:
-        pd.DataFrame: version of diagnostics with duplicates removed.
-    """
-
-    diagnostics_quality = diagnostics_raw[["VisitID", "Request DateTime",
-                                           "ItemMasterCategory"]].copy()
-    diagnostics_quality = diagnostics_quality.rename(columns={
-                                            "ItemMasterCategory": "EventName",
-                                            "Request DateTime": "EventTime",
-                                            "VisitID": "VisitId"})
-    diagnostics_quality["EventTime"] = pd.to_datetime(
-                    diagnostics_quality["EventTime"], format="%d/%m/%Y %H:%M")
-
-    # collapse similar rows within a short time for a patient to one row
-    mask = (diagnostics_quality.sort_values(by=["VisitId", "EventTime"])
-            .groupby("VisitId")["EventTime"].diff()
-            .lt(collapse_diagnostics_rows_within_time_of).sort_index())
-
-    # index the df with this mask to remove the duplicates
-    diagnostics_quality = diagnostics_quality.loc[~mask].copy()
-    return diagnostics_quality
-
-
-def rename_columns_and_change_events_to_obs(obs_raw):
-    """
-    Args:
-        obs_raw (pd.DataFrame): raw obs data frame.
-
-    Returns:
-       pd.DataFrame: a cleaned version of the obs data frame.
-    """
-    obs_quality = obs_raw.copy()
-    obs_quality = obs_raw.rename(columns={"ChartType": "EventName",
-                                          "ChartDateTime": "EventTime",
-                                          "VisitID": "VisitId"})
-    obs_quality["EventTime"] = pd.to_datetime(obs_quality["EventTime"],
-                                              format="%d/%m/%Y %H:%M")
-    obs_quality["EventName"] = "Observations"
-    return obs_quality
-
-#------------------------Cleaning functions used in main cleaning function
 def remove_repeats_of_events_that_should_not_be_repeated(events_quality,
-                                        event_name_to_exclude_for_repetition):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events data frame.
-        event_name_to_exclude_for_repetition (list[str]): list of events that
-        should not repeat.
-
-    Returns:
-        pd.DataFrame: clensed events data frame with duplicates of non repeat
-        events removed.
-    """
-    mask_for_dropping_duplicate_events = (events_quality["EventName"]
-                                    .isin(event_name_to_exclude_for_repetition)
-                                    & (events_quality.duplicated(subset=
-                                                                 ["VisitId",
-                                                                  "EventName"],
-                                                                keep="first")))
-    events_quality = (events_quality
-                      .loc[~mask_for_dropping_duplicate_events].copy())
+                                        event_names_to_exclude_for_repetition):
+    #Function to remove any repeats of events that should not be repeated
+    duplicate_events_mask = (events_quality["EventName"]
+                             .isin(event_names_to_exclude_for_repetition)
+                            & (events_quality
+                               .duplicated(subset=["VisitId", "EventName"],
+                                           keep="first")))
+    events_quality = events_quality.loc[~duplicate_events_mask].copy()
     return events_quality
 
-
 def remove_events_after_discharged(events_quality):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events data frame.
-
-    Returns:
-        pd.DataFrame: events data frame with any events after discharge removed.
-    """
+    #Remove any events that happen after discharge
     events_quality = events_quality.sort_values(by=["VisitId", "EventTime"])
-    target_event = "Discharged"
-    events_quality["target_event"] = events_quality["EventName"] == target_event
+    events_quality["target_event"] = ((events_quality["EventName"] == "Discharged")
+                                      | (events_quality['EventName'].str.contains('Admitted')))
     events_quality["after_target_event"] = (events_quality.groupby("VisitId")
                                         ["target_event"].cumsum().astype(bool))
     events_quality = (events_quality.loc[~(events_quality["after_target_event"])
-                                         | (events_quality["target_event"])]
-                                         .copy().drop(columns=["target_event",
-                                                        "after_target_event"]))
+                                    | (events_quality["target_event"])].copy()
+                      .drop(columns=["target_event", "after_target_event"]))
     return events_quality
 
-
-def augmenting_admittance_data(adm_status_raw, events_quality):
-
-    """_summary_
-    Args:
-        adm_status_raw (pd.DataFrame): admitted status raw data frame.
-        events_quality (pd.DataFrame): clensed events data frame.
-    Returns:
-        pd.DataFrame: clensed events data frame.
-    """
-    adm_status_quality = adm_status_raw.rename(columns={"AttendanceID"
-                                                        : "VisitId"})
-    adm_status_quality = adm_status_quality.loc[adm_status_quality["Adm"]
-                                                != "Non-Admitted",
-                                                ["VisitId", "Adm"]].copy()
-    events_quality = events_quality.merge(adm_status_quality, on="VisitId",
-                                          how="left")
-    events_quality.loc[(events_quality["EventName"] == "Discharged")
-                       & (~pd.isnull(events_quality["Adm"])),
-                       "EventName"] = events_quality["Adm"]
-    events_quality = events_quality.drop(["Adm"], axis=1)
+def remove_senior_review_if_seen_by(events_quality):
+    #function to remove senior review events if seen by event at the same time/
+    #staff id/ location.
+    #----
+    #The below works because alphabetically, senior reviewed is after seen by.
+    rem = (events_quality
+           .loc[events_quality['EventName'].isin(['Seen By Clinician/Treated',
+                                                  'Senior Reviewed'])]
+           .sort_values(by=['EventName'])
+           .duplicated(subset=['VisitId', 'EventTime', 'EventStaffId',
+                               'EventLocation'], keep='first'))
+    #Remove these events
+    events_quality = (events_quality.loc[~events_quality.index
+                                         .isin(rem[rem].index)].copy())
     return events_quality
 
-
-def merge_data(events_quality, diagnostics_quality, obs_quality):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events dataframe
-        diagnostics_quality (Optional[pd.DataFrame], optional): clensed
-        diagnostics data to merge onto events data. Defaults to None.
-        obs_quality (Optional[pd.DataFrame], optional): clensed obs data to
-        merge onto events data. Defaults to None.
-
-    Returns:
-        pd.DataFrame: clensed events data merged onto other required data
-    """
-    if obs_quality is not None:
-        events_quality = pd.concat([events_quality, obs_quality])
-    if diagnostics_quality is not None:
-        events_quality = pd.concat([events_quality, diagnostics_quality])
-    events_quality["EventTime"] = pd.to_datetime(events_quality["EventTime"],
-                                                  format="%d/%m/%Y %H:%M")
+def set_location_for_ambulance_arrival(events_quality):
+    #Function to add Ambulance location for Ambulance Arrivals
+    events_quality.loc[(pd.isnull(events_quality["EventLocation"]))
+                       & (events_quality["EventName"] == "Ambulance Arrival"),
+                       "EventLocation"] = "Ambulance"
     return events_quality
 
+def forward_fill_on_locations(events_quality):
+    #Function to forward fill missing event locations
+    events_quality["EventLocation"] = (events_quality.groupby("VisitId")
+                                       ["EventLocation"].ffill())
+    return events_quality
 
 def remove_excluded_events_and_locations(events_quality, excluded_event_names,
                                          locations_to_drop):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events dataframe.
-        excluded_event_names (list[str]): list of event names to exclude.
-        locations_to_drop (list[str]): list of locations to exclude.
-
-    Returns:
-        pd.DataFrame: clensed events dataframe.
-    """
+    #Function to remove excluded events and locations
+    #----
     #remove excluded event names
     events_quality = events_quality.loc[~events_quality["EventName"]
                                         .isin(excluded_event_names)].copy()
     #remove visit ids with excluded event locations
-    mask = events_quality.loc[events_quality["EventLocation"]
-                              .isin(locations_to_drop)
-                              | events_quality["EventLocation"].isna()].copy()
-    visit_ids_to_exclude = mask["VisitId"].unique()
+    visit_ids_to_exclude = (events_quality
+                            .loc[events_quality["EventLocation"]
+                                 .isin(locations_to_drop)
+                                | events_quality["EventLocation"].isna(),
+                                'VisitId'].unique())
     events_quality = events_quality.loc[~events_quality["VisitId"]
                                         .isin(visit_ids_to_exclude)].copy()
-
     return events_quality
-
-
-def set_location_for_ambulance_arrival(events_quality):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events dataframe.
-
-    Returns:
-        pd.DataFrame: clensed events data frame with Ambulance as event location
-        where required.
-    """
-    events_quality.loc[(pd.isnull(events_quality["EventLocation"]))
-                       & (events_quality["EventName"] == "Ambulance Arrival"),
-                       "EventLocation"] = "Ambulance"
-
-    return events_quality
-
-
-def forward_fill_on_locations(events_quality):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events dataframe.
-    Returns:
-        pd.DataFrame: clensed events dataframe with missing event locations
-        filled in.
-    """
-    events_quality["EventLocation"] = (events_quality.groupby("VisitId")
-                                       ["EventLocation"].ffill())
-
-    return events_quality
-
 
 def mapping_of_natural_order(events_quality, natural_order_for_processes):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events dataframe.
-        natural_order_for_processes (dict[str, int]): dictionary of the ideal
-        order of processes.
-
-    Returns:
-        pd.DataFrame: clensed dataframe with an order number assigned to events.
-    """
-
+    #Function to map events to their order ready for sorting.
     events_quality["natural_order"] = (events_quality["EventName"]
                                        .map(natural_order_for_processes))
+    return events_quality
 
+def artificially_change_imaging_time(events_quality, natural_order_for_processes):
+    #Function to artificially insert imaging after the latest event with a
+    #natural order before imaging
+    #----
+    #remove e
+    #reset index as data has been sorted.
+    events_quality = events_quality.reset_index(drop=True)
+    #Find the natural order number of the first imaging step and filter data to
+    #all events that occur before that.
+    min_natural_order = natural_order_for_processes["Radiology"]
+    before_events = events_quality.loc[events_quality["natural_order"]
+                                < min_natural_order, ['VisitId', 'EventTime']]
+    #Get the latest event time of an event before we want the imaging events to
+    # occur.
+    max_before_event = before_events.groupby(['VisitId']).idxmax()
+    max_before_eventtime = events_quality.loc[
+                                max_before_event['EventTime'].values.tolist(),
+                                ['VisitId', 'EventTime']]
+    #add 1 seccond on to this event time, merge back onto events_quality and
+    #change imaging event time to be the max before event datetime + 1 second
+    #to try and ensure imaging happens in the correct place.
+    max_before_eventtime['EventTime'] = (max_before_eventtime['EventTime']
+                                         + pd.to_timedelta(1, unit='s'))
+    events_quality = events_quality.merge(max_before_eventtime, on='VisitId',
+                                          how='left', suffixes=['', 'Imaging'])
+    events_quality.loc[events_quality['EventName']
+                       .isin(["Radiology", "CT", "MRI", "Ultrasound"]),
+                       'EventTime'] = events_quality['EventTimeImaging']
+    #drop column used for logic
+    events_quality = events_quality.drop('EventTimeImaging', axis=1)
     return events_quality
 
 
 def add_walk_in_for_non_ambulance_arrivals(events_quality):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events dataframe.
-
-    Returns:
-        pd.DataFrame: clensed events dataframe with walkin for non ambulance
-        arrivals.
-    """
+    #Function to add in walkin arrivals for any non-ambulance arrival.
+    #----
     # groupby to get first event for each patient
     walk_in_filter = (events_quality.groupby("VisitId", as_index=False)
                       [["EventTime", "EventName"]].first())
-
     # filter out all ambulance arrivals
     walk_in_filter = walk_in_filter.loc[walk_in_filter["EventName"]
                                         != "Ambulance Arrival"].copy()
-
     # groupby to get min values just for walk-ins
     only_walk_ins_first_event = (walk_in_filter
-                                 .groupby("VisitId",as_index=False)
-                                 [["EventTime"]].min())
-
+                                 .groupby("VisitId", as_index=False)
+                                 ["EventTime"].min())
     # copy df and add the walk in event
-    only_walk_ins_first_event["EventName"] = WALK_IN
+    only_walk_ins_first_event["EventName"] = "Walk-In"
     # add back to main df
     events_quality = pd.concat([events_quality, only_walk_ins_first_event])
-
     return events_quality
 
 
-def add_wait_for_beds_for_admitted_patients(events_quality):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events dataframe.
-
-    Returns:
-        pd.DataFrame: clensed events dataframe with wait for bed as an event for
-        admitted patients.
-    """
-
-    events_quality = sort_events(events_quality)
+def add_wait_for_beds_for_admitted_patients(events_quality, admitted_map):
+    #Add wait for bed events if there is an event after discharge
+    #----
     #Get last event for each patient
-    lastevent_filter_groupby = (events_quality
-                                 .groupby("VisitId", as_index=False)
-                                 [["EventTime", "EventName"]].last())
+    last_event = (events_quality.groupby("VisitId", as_index=False)
+                  [["EventTime", "EventName"]].last())
     #remove any discharged patients
-    admitted_patients = lastevent_filter_groupby.loc[
-                                 lastevent_filter_groupby["EventName"]
-                                 != "Discharged"].copy()
+    admitted_patients = (last_event.loc[last_event["EventName"] != "Discharged"]
+                         .copy())
     #Add in the extra wait for bed event
-    admitted_patients["EventName"] = (WAITING_FOR_BED + " - "
-                                      + admitted_patients["EventName"] + "")
+    admitted_patients["EventName"] = ("Wait for Bed - "
+                                      + admitted_patients["EventName"])
     #rename admitted events to just admitted
     events_quality['EventName'] = (events_quality['EventName']
                                    .replace(admitted_map))
-
+    #Concat the admitted events to the events dataframe
     events_quality = pd.concat([events_quality, admitted_patients])
-
     return events_quality
 
-
 def add_spawn_end_events(events_quality, natural_order_for_processes):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events dataframe.
-
-    Returns:
-        pd.DataFrame: clensed events dataframe with spawned and removed events.
-    """
+    #Function to add spawn and end events
+    #----
     # groupby to get min values - spawn
-    min_df = events_quality.groupby("VisitId", as_index=False)["EventTime"].first()
-    min_df["EventName"] = SPAWN
-    min_df["natural_order"] = natural_order_for_processes[SPAWN]
-
+    min_df = (events_quality.groupby("VisitId", as_index=False)
+              ["EventTime"].first())
+    min_df["EventName"] = "Spawn"
+    min_df["natural_order"] = natural_order_for_processes["Spawn"]
     # groupby to get max values - end
-    max_df = events_quality.groupby("VisitId", as_index=False)["EventTime"].max()
-    max_df["EventName"] = REMOVED
-    max_df["natural_order"] = natural_order_for_processes[REMOVED]
-
+    max_df = (events_quality.groupby("VisitId", as_index=False)
+              ["EventTime"].max())
+    max_df["EventName"] = "Removed"
+    max_df["natural_order"] = natural_order_for_processes["Removed"]
     # concat these to main dataframe
     events_quality = pd.concat([events_quality, min_df, max_df])
     events_quality = sort_events(events_quality)
     events_quality["EventLocation"] = events_quality["EventLocation"].ffill()
-
     return events_quality
-
 
 def keep_last_location_of_patient(events_quality):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events dataframe.
-    Returns:
-        pd.DataFrame: clensed events dataframe with last event location kept.
-    """
+    #Function to keep the last location of each patient as the location
     events_quality["EventLocation"] = (events_quality.groupby("VisitId")
                                        ["EventLocation"].transform("last"))
-
     return events_quality
 
-
-def map_locations_to_triage_category_and_create_pathway_column(events_quality,
+def map_locations_and_create_pathway_column(events_quality,
                                                          locations_pathway_map):
-    """
-    Args:
-        events_quality (pd.DataFrame): clensed events quality dataframe.
-        locations_pathway_map (dict[str, str]): dictionary to map locations to
-        their pathway.
-        natural_order_for_processes (dict[str, int]): dictionary to map 
-        processes to their order.
-
-    Returns:
-        pd.DataFrame: clensed events quality dataframe woth pathway addded.
-    """
+    #Function to map event locations to a pathway and create the pathway column
+    #of EventName (Pathway)
+    #----
     #Map the pathways to the event locations
     events_quality["Pathway"] = (events_quality["EventLocation"]
                                  .map(locations_pathway_map))
     #Create a column of the event name and pathway
     events_quality["Event (Pathway)"] = (events_quality["EventName"]
                                        + " (" + events_quality["Pathway"] + ")")
-    events_quality = sort_events(events_quality)
-
     return events_quality
+
+def record_and_remove_treat_repeat(events_quality):
+    #Get the average number of treatments by pathway
+    treat_repeat = ((events_quality
+                     .loc[events_quality['EventName'] == 'Treatment']
+                     .groupby(['Pathway', 'VisitId'], as_index=False)
+                      ['EventTime'].count()
+                      .groupby('Pathway')['EventTime'].mean())
+                     .rename('TreatRepeat'))
+    #Keep only the timestamp of the patient's first treatment. reset index
+    #to deal with duplicated index
+    events_quality = events_quality.reset_index(drop=True)
+    #Get indicies of the first treatment
+    first_treatment = (events_quality
+                       .loc[events_quality['EventName'] == 'Treatment']
+                       .groupby('VisitId')['EventName'].idxmax().tolist())
+    #Get indicies of non treatment events to keep as well
+    non_treatment = events_quality['EventName'] != 'Treatment'
+    non_treatment = non_treatment[non_treatment].index.tolist()
+    #Filter out repeated events
+    events_quality = events_quality.loc[non_treatment + first_treatment].copy()
+    return treat_repeat, events_quality
+
+
+################################################################################
+#----------------------------main cleaning function----------------------------#
+################################################################################
+
+def main_cleanse_and_transform_data(events_quality,
+                                    event_names_to_exclude_for_repetition,
+                                    excluded_event_names, locations_to_drop,
+                                    natural_order_for_processes,
+                                    include_spawn_end_events,
+                                    locations_pathway_map, keep_last_location,
+                                    admitted_map):
+    #Main function to apply all cleaning and transformation functions onto the
+    #input data
+    #----
+    #remove repeated or 'non real' events
+    events_quality = (remove_repeats_of_events_that_should_not_be_repeated(
+                       events_quality, event_names_to_exclude_for_repetition))
+    events_quality = remove_events_after_discharged(events_quality)
+    events_quality = remove_senior_review_if_seen_by(events_quality)
+    #fill in missing locations and remove locations/events for removal
+    events_quality = set_location_for_ambulance_arrival(events_quality)
+    events_quality = forward_fill_on_locations(events_quality)
+    events_quality = remove_excluded_events_and_locations(events_quality,
+                                                          excluded_event_names,
+                                                          locations_to_drop)
+    #Sort events data and add in walkin and wait for bed events
+    events_quality = mapping_of_natural_order(events_quality,
+                                              natural_order_for_processes)
+    events_quality = sort_events(events_quality)
+    events_quality = add_walk_in_for_non_ambulance_arrivals(events_quality)
+    events_quality = sort_events(events_quality)
+    events_quality = add_wait_for_beds_for_admitted_patients(events_quality,
+                                                             admitted_map)
+    events_quality = mapping_of_natural_order(events_quality,
+                                              natural_order_for_processes)
+    #If true, add in spawn and end events
+    if include_spawn_end_events:
+        events_quality = add_spawn_end_events(events_quality,
+                                              natural_order_for_processes)
+    #If true, replace all locations with patient's final location
+    if keep_last_location:
+        events_quality = keep_last_location_of_patient(events_quality)
+    #Add pathway column and sort events
+    events_quality = map_locations_and_create_pathway_column(events_quality,
+                                                        locations_pathway_map)
+    events_quality = sort_events(events_quality)
+    treat_repeat, events_quality = record_and_remove_treat_repeat(events_quality)
+    events_quality = artificially_change_imaging_time(events_quality,
+                                                      natural_order_for_processes)
+    events_quality = sort_events(events_quality)
+    return events_quality, treat_repeat
