@@ -42,6 +42,32 @@ admitted_map = {'Admitted - MAU':'Admitted',
 pathways_wait_in_place = ["Majors", "Resus"]
 excluded_event_names = ["Clinically Ready to Proceed"]
 locations_to_drop = ["Paediatrics", "Plym"]
+#Process Durations that are manually added
+# process : [mean, std, min, max]
+add_process_durs = {'CT':[20, 10, 7, 40],
+                    'Radiology':[10, 5, 5, 30],
+                    'Obs 60 min (Ambulatory)':[10, np.nan, 5, 20],
+                    'Obs 60 min (Resus)':[10, np.nan, 5, 20],
+                    'Obs 60 min (Majors)':[10, np.nan, 5, 20],
+                    'Obs 30 min (Resus)':[10, np.nan, 5, 20],
+                    'Obs 30 min (Majors)':[10, np.nan, 5, 20],
+                    'Misc Assessment' : [10, 5, 5, 30],
+                    'Wait for Bed - Admitted - MAU (Ambulatory)':	[456, 114, 0, np.nan],
+                    'Wait for Bed - Admitted - MAU (Majors)':	[617, 154.25, 0, np.nan],
+                    'Wait for Bed - Admitted - MAU (Minors)':	[456, 114, 0, np.nan],	
+                    'Wait for Bed - Admitted - MAU (Resus)':	[539, 134.75, 0, np.nan],
+                    'Wait for Bed - Admitted - Other Derriford Ward (Ambulatory)':	[37, 9.25, 0, np.nan],	
+                    'Wait for Bed - Admitted - Other Derriford Ward (Majors)':	[261, 65.25, 0, np.nan],	
+                    'Wait for Bed - Admitted - Other Derriford Ward (Minors)':	[37, 9.25, 0, np.nan],	
+                    'Wait for Bed - Admitted - Other Derriford Ward (Resus)':	[174, 43.5, 0, np.nan],	
+                    'Wait for Bed - Admitted - SDEC (Ambulatory)':	[56, 14, 0, np.nan],	
+                    'Wait for Bed - Admitted - SDEC (Majors)':	[305, 76.25, 0, np.nan],	
+                    'Wait for Bed - Admitted - SDEC (Minors)':	[56, 14, 0, np.nan],
+                    'Wait for Bed - Admitted - SDEC (Resus)':	[597, 149.25, 0, np.nan]}
+proc_durs_0 = ['Triaged - Kickoff 60 min Obs (Majors)',
+               'Triaged - Kickoff 30 min Obs (Majors)',
+               'Triaged - Kickoff 60 min Obs (Resus)',
+               'Triaged - Kickoff 30 min Obs (Resus)']
 #list of the new events to add after triage to kick off repeated obs and their
 #probabilities.
 #[(From Event, To Event, Probability, Recurrent Process)]

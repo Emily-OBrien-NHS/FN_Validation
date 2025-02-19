@@ -81,47 +81,110 @@ def only_daytime_events(dataframe):
 
 def generate_and_output_process_durations_log_normal(directory_path,
                                                      processed_events,
-                                                     processes):
+                                                     processes, output_name):
     #Function to fit a log normal distribution to the data
     #----
     #fit a log normal to each process data
     new_entries = []
     for process in processes:
-        #get the data for that process
+        #get the data for that process, with 0s removed
         data = (processed_events
-                .loc[processed_events["Event (Pathway)"] == str(process),
+                .loc[(processed_events["Event (Pathway)"] == str(process))
+                     & (processed_events['diffMinutes']>0),
                      "diffMinutes"].copy().dropna().astype(float))
         if process != "" and len(data) > 0:
-            #if data for that process, fit a log normal and record parameters
-            shape, loc, scale = sp.stats.lognorm.fit(data.values, floc=-0.00001)
+            #if data for that process, fit a log normal (use mean of nlog of
+            # data as scale start point) and record parameters
+            shape, loc, scale = sp.stats.lognorm.fit(
+                          data.values, scale=np.log(data).mean(), floc=-0.00001)
             mu = np.log(scale)
             sigma = shape
             mean = math.exp(mu + (0.5 * sigma**2))
             variance = (math.exp(sigma**2)-1) * math.exp((2*mu)+(sigma**2))
+
             if "(" in process:
                 new_entries.append({"Event (Pathway)": str(process),
                                     "Mean": mean,
                                     "StdDev": math.sqrt(variance),
                                     "Min": min(data.values),
-                                    "Max": max(data.values)})
+                                    "Max": max(data.values),
+                                    "Notes":np.nan})
             else:
-                #if pathway not in process, add this in
+                #if pathway not in process (imaging), add this in
                 for pathway in ["Minors", "Ambulatory", "Majors", "Resus"]:
-                    new_entries.append({"Event (Pathway)": str(process) + " (" + pathway + ")",
+                    new_entries.append({"Event (Pathway)":
+                                        str(process) + " (" + pathway + ")",
                                     "Mean": mean,
                                     "StdDev": math.sqrt(variance),
                                     "Min": min(data.values),
-                                    "Max": max(data.values)})
-        elif process != "":
+                                    "Max": max(data.values),
+                                    "Notes":np.nan})
+                    
+            if config.plots:
+                #If plots is true, create the plot of the histogram and distribution
+                fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+                #got log normal and an array of x values to plot it
+                Y = sp.stats.lognorm(s=shape, scale=scale)
+                x = np.linspace(min(data), max(data), 1000)
+                #plot histogram
+                ax.hist(data, bins=100, density=True, label=process)
+                #plt log normal
+                ax.plot(x, Y.pdf(x), label='lognormal', color='red')
+                #add trimmings and save
+                ax.legend()
+                ax.set_xlabel("time (minutes)")
+                file_name = process.replace('/', '-')
+                ax.set_title(f"{process} {output_name}")
+                fig.savefig(directory_path / f"{file_name}")
+                plt.close()
+
+        elif (process != ""):
             #if no data, record empty parameters
             new_entries.append({"Event (Pathway)": process,
                                 "Mean": 0,
                                 "StdDev": None,
                                 "Min": None,
-                                "Max": None})
-    #Save lognormal results as dataframe, tidy and export to csv
+                                "Max": None,
+                                "Notes":np.nan})
+            
+    #----Add in manually added process timings
+    for process, times in config.add_process_durs.items():
+        if '(' in process:
+            new_entries.append({"Event (Pathway)": process,
+                                "Mean": times[0],
+                                "StdDev": times[1],
+                                "Min": times[2],
+                                "Max": times[3],
+                                "Notes":"Timings from config"})
+        else:
+            for pathway in ["Minors", "Ambulatory", "Majors", "Resus"]:
+                new_entries.append({"Event (Pathway)":
+                                    str(process) + " (" + pathway + ")",
+                                "Mean": times[0],
+                                "StdDev": times[1],
+                                "Min": times[2],
+                                "Max": times[3],
+                                "Notes":"Timings from config"})
+    #----Add in 0 time events
+    for process in config.proc_durs_0:
+        if '(' in process:
+            new_entries.append({"Event (Pathway)": process,
+                                "Mean": 0,
+                                "StdDev": np.nan,
+                                "Min": np.nan,
+                                "Max": np.nan,
+                                "Notes":"Config 0 time"})
+        else:
+            for pathway in ["Minors", "Ambulatory", "Majors", "Resus"]:
+                new_entries.append({"Event (Pathway)":
+                                    str(process) + " (" + pathway + ")",
+                                "Mean": 0,
+                                "StdDev": np.nan,
+                                "Min": np.nan,
+                                "Max": np.nan,
+                                "Notes":"Config 0 time"})
+    #----Save lognormal results as dataframe, tidy and export to csv
     process_durations = pd.DataFrame(new_entries)
-    process_durations["Notes"] = None
     process_durations = process_durations.rename(
                         columns={"Mean": "Duration Mean",
                         "Event (Pathway)": "Process (Pathway and Recurrent)"})
@@ -155,20 +218,5 @@ def main_generate_histogram_and_process_durations(directory_path,
     #Log normal distributions for each process
     processes = processed_events["Event (Pathway)"].unique().tolist()
     generate_and_output_process_durations_log_normal(plot_folder_directory_path,
-                                                    processed_events, processes)
-    if plots:
-        event_times = (processed_events.groupby(groupby_column)["diffMinutes"])
-        for group, data in event_times:
-            #create a histogram for the data in each event.
-            title = str(group).replace("_", "")
-            ax = data.plot.hist(bins=100, figsize=(12, 8))
-            ax.grid(True, which="both", linestyle="--", linewidth=0.5)
-            ax.set_xlabel("time (minutes)")
-            ax.set_title(f"{title} {directory_path}")
-            fig = ax.get_figure()
-            if fig is not None:
-                slash_replacement = {"\\": "-", "//": "-", "/": "-"}
-                for key, value in slash_replacement.items():
-                    label = f"{(str(title)).replace(key, value)}.png"
-                fig.savefig(plot_folder_directory_path / f"{label}")
-                plt.close(fig)
+                                                    processed_events, processes,
+                                                    directory_path)
