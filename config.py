@@ -1,8 +1,14 @@
 import pandas as pd
 import numpy as np
+from datetime import datetime
+
+############################FILEPATHS############################
+output_path = "G:/PerfInfo/Performance Management/PIT Adhocs/2024-2025/HannahP 2425/UEC Adhocs/Frazer Nash UEC/Code Scenarios/" + datetime.today().strftime('%Y-%m-%d')
+other_input_filepath = "G:/PerfInfo/Performance Management/PIT Adhocs/2024-2025/HannahP 2425/UEC Adhocs/Frazer Nash UEC/Baseline with resources"
 
 #######################THRESHOLD VARIABLES#######################
 collapse_diagnostics_within_time = pd.Timedelta("5m")
+transition_threshold = 2
 quantile_threshold = 0.97
 repeat_time_threshold = 10
 
@@ -17,8 +23,14 @@ export_log_to_csv_after_using_log_converter = False
 keep_last_location = True
 include_spawn_end_events = False
 plots = True
+print_validation = False
 
 ###########################LISTS/DICTS###########################
+pathways =  ["Minors", "Ambulatory", "Majors", "Resus"]
+additional_filenames = ["Arrival Rates", "Location Opening Hours",
+                        "Simulation Settings", "Location Capacities",
+                        "Resource Rota", "Process Resource Requirement",
+                        "Process Locations"]
 event_names_to_exclude_for_repetition = ["Triaged", "Discharged", "Booked In",
                                          "Ambulance Arrival", "Walk-In",
                                          "Admitted - Other Derriford Ward",
@@ -42,6 +54,8 @@ admitted_map = {'Admitted - MAU':'Admitted',
 pathways_wait_in_place = ["Majors", "Resus"]
 excluded_event_names = ["Clinically Ready to Proceed"]
 locations_to_drop = ["Paediatrics", "Plym"]
+location_opening_hours = {'Location':[], 'Day of Week':[], 'Start Time':[],
+                          'End Time':[], 'Notes':[]}
 #Process Durations that are manually added
 # process : [mean, std, min, max]
 add_process_durs = {'CT':[20, 10, 7, 40],
@@ -64,10 +78,17 @@ add_process_durs = {'CT':[20, 10, 7, 40],
                     'Wait for Bed - Admitted - SDEC (Majors)':	[305, 76.25, 0, np.nan],	
                     'Wait for Bed - Admitted - SDEC (Minors)':	[56, 14, 0, np.nan],
                     'Wait for Bed - Admitted - SDEC (Resus)':	[597, 149.25, 0, np.nan]}
-proc_durs_0 = ['Triaged - Kickoff 60 min Obs (Majors)',
+proc_durs_0 = ['Walk-In (Ambulatory)',
+               'Walk-In (Majors)',
+               'Walk-In (Minors)',
+               'Walk-In (Resus)',
+               'Triaged - Kickoff 60 min Obs (Majors)',
                'Triaged - Kickoff 30 min Obs (Majors)',
                'Triaged - Kickoff 60 min Obs (Resus)',
                'Triaged - Kickoff 30 min Obs (Resus)']
+#Put 0 time processes into dictionary to be added
+for process in proc_durs_0:
+    add_process_durs[process]  = [0, np.nan, np.nan, np.nan]
 #list of the new events to add after triage to kick off repeated obs and their
 #probabilities.
 #[(From Event, To Event, Probability, Recurrent Process)]

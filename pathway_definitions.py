@@ -260,7 +260,7 @@ def remove_transitions_below_percentage(pathway_definitions, threshold):
 #----------------------main pathway definitions function-----------------------#
 ################################################################################
 
-def main_generate_dfg_and_pathway_definitions(directory_path, events_data,
+def main_generate_dfg_and_pathway_definitions(events_data,
     filepath, include_spawn_end_events, obs_splits, export_event_log_csv,
     export_log_to_csv_after_using_log_converter, pathways_wait_in_place,
     threshold, threshold_exclude, percentage_exclude,
@@ -268,15 +268,13 @@ def main_generate_dfg_and_pathway_definitions(directory_path, events_data,
     #Function to generate and output the pathway definitions file and the
     #DFG/pathway diagrams.
     #----
-    #create file directory if it doesn't exist
-    filepath.mkdir(exist_ok=True, parents=True)
     #If threshold exclude, filter out events below the threshold.
     if threshold_exclude:
         events_data = exclude_patients_with_transitions_below_threshold(
                       events_data, threshold)
         events_data = add_reset_transitions(events_data)
     #save the events data to csv
-    events_data.to_csv(str(filepath / "Events Data.csv"), index=False)
+    events_data.to_csv((filepath + "/Additional Outputs/Events Data.csv"), index=False)
     #get pathway definitions and add in the triage obs events.
     pathway_definitions = generate_pathway_definitions(events_data,
                                                        include_spawn_end_events)
@@ -285,22 +283,24 @@ def main_generate_dfg_and_pathway_definitions(directory_path, events_data,
     process_recurrence_triggers, process_recurrence = create_process_recurrence(
                                                       obs_splits)
     process_recurrence_triggers.to_csv(
-        str(filepath / "Process Recurrence Triggers.csv"), index=False)
+        (filepath + "/Process Recurrence Triggers.csv"), index=False)
     process_recurrence.to_csv(
-        str(filepath / "Process Recurrence.csv"), index=False)
+        (filepath + "/Process Recurrence.csv"), index=False)
     #if post processing functions, apply these, then save the pathway
     # definitions to csv and output the transitions plot.
     if percentage_exclude:
         pathway_definitions = remove_transitions_below_percentage(
                               pathway_definitions, threshold)
-    pathway_definitions.to_csv(str(filepath / "Pathway Definition.csv"),
+    pathway_definitions.to_csv((filepath + "/Pathway Definition.csv"),
                                index=None)
-    output_transition_viz(pathway_definitions, filepath, directory_path)
+    output_transition_viz(pathway_definitions,
+                          filepath + "/Additional Outputs/Flow Diagrams",
+                          "transition viz")
     #Create and save process wait in place.
     wait_in_place = pathway_wait_in_place(pathway_definitions,
                                           pathways_wait_in_place,
                                           [lst[3] for lst in obs_splits])
-    wait_in_place.to_csv(filepath/"Process Wait in Place.csv", index=False)
+    wait_in_place.to_csv(filepath + "/Process Wait in Place.csv", index=False)
     #Create log files and dfgs
     if split_column is None:
         logs = {}
@@ -310,7 +310,7 @@ def main_generate_dfg_and_pathway_definitions(directory_path, events_data,
     else:
         logs = {}
         for i in events_data[split_column].unique():
-            split_filepath = filepath / i
+            split_filepath = filepath + '/' + i
             logs[f"{i}"] = get_dfg(events_data.loc[events_data[split_column]
                                                    == i].copy(),
                                    export_event_log_csv,
@@ -319,4 +319,6 @@ def main_generate_dfg_and_pathway_definitions(directory_path, events_data,
     #save the direct follows graphs.
     for key, dfg in logs.items():
         gviz = dfg_visualizer.apply(dfg)
-        dfg_visualizer.save(gviz, filepath / f"{key}.png")
+        dfg_visualizer.save(gviz, (filepath
+                                   + "/Additional Outputs/Flow Diagrams/"
+                                   + f"{key}.png"))
