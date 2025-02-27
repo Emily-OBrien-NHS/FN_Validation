@@ -27,10 +27,13 @@ def add_difference_in_minutes_to_durations(events_quality,
                     & event_diffs["diffMinutes"].isna(), "diffMinutes"] = 0
     return event_diffs
 
-def add_imaging_timings(event_diffs, imaging_raw):
-    #Remove imaging data from the events file
-    event_diffs = event_diffs.loc[~event_diffs["EventName"]
-                                  .isin(config.imaging_events)].copy()
+def add_additional_timings(event_diffs, imaging_raw, bed_wait):
+    #Remove imaging and wait for bed data from the events file
+    event_diffs = event_diffs.loc[(~event_diffs["EventName"]
+                                  .isin(config.imaging_events))
+                                  & (~event_diffs["EventName"]
+                                     .str.contains('Wait for Bed'))].copy()
+    ####IMAGING
     #Filter imaging to MRI and Ultrasound, and get their timings
     image_times = imaging_raw.loc[imaging_raw["EventName"]
                                   .isin(["MRI", "Ultrasound"])].copy()
@@ -38,9 +41,19 @@ def add_imaging_timings(event_diffs, imaging_raw):
         image_times["ResultsAvailableDateTime"] - image_times["EventTime"])
         .dt.total_seconds() / 60)
     image_times["Event (Pathway)"] = image_times["EventName"]
+    ####Wait for Bed
+    bed_wait["diffMinutes"] = pd.to_timedelta(bed_wait["BedReadyDateTime"]
+                                              - bed_wait["BedRequestedDateTime"]
+                                              ).dt.total_seconds() / 60
+    bed_wait["Event (Pathway)"] = "Wait for Bed - " + bed_wait["EventName"] + " (" + bed_wait['Pathway'] + ")"
+    bed_wait = bed_wait.dropna(subset="diffMinutes")
+    ####CONCAT
     #Concat this back onto the events file
-    event_diffs = pd.concat([event_diffs,image_times[["VisitId", "EventTime",
-                            "EventName", "Event (Pathway)", "diffMinutes"]]])
+    event_diffs = pd.concat([event_diffs,
+                             image_times[["VisitId", "EventTime", "EventName",
+                                          "Event (Pathway)", "diffMinutes"]],
+                            bed_wait[["EventName", "Event (Pathway)", "diffMinutes"]]
+                            ])
     return event_diffs
 
 
@@ -138,7 +151,7 @@ def generate_and_output_process_durations_log_normal(directory_path, plot_path,
         else:
             #If no data, add 0s and np.nan
             mean = 0
-            std, min_, max_ = np.nan
+            std = min_ = max_ = np.nan
             pathway_loop = False
 
         #If process is not on a pathway, repeat the timings for each pathway,

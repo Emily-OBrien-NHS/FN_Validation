@@ -372,6 +372,38 @@ group by nerve.NCAttendanceId
 
     """
     imaging_raw = pd.read_sql(imaging_query, cl3_engine)
+    # ---------------------- Wait for Bed data
+    bed_wait_query = """SELECT NCAttendanceId AS VisitId, DATEDIFF(MINUTE, BedRequestedDateTime, BedReadyDateTime) AS diffMinutes,
+    CASE WHEN admitprvsprefno IS NOT NULL AND ActualDischargeDestinationWardCode IN ('rk950aau','rk950aau01', 'rk950afu') THEN 'Admitted - SDEC'
+    WHEN admitprvsprefno IS NOT NULL AND ActualDischargeDestinationWardCode IN ('rk950mau','rk950amw') THEN 'Admitted - MAU'
+    WHEN admitprvsprefno IS NOT NULL AND ActualDischargeDestinationWardCode LIKE 'rk950%' THEN 'Admitted - Other Derriford Ward'
+    ELSE 'Non-Admitted' END AS EventName
+    INTO #ATT
+    FROM [DataWarehouse].[ED].[vw_EDAttendance]
+    WHERE DischargeDateTime BETWEEN '01-Apr-2023 00:00:00' AND '30-Jun-2024 00:00:00'
+    AND ActualDischargeDestinationWardCode  LIKE 'rk950%'
+
+
+    SELECT NCAttendanceId, LocationDescription, LocationSubType, LocationOrder, StartDateTime, EndDateTime
+    INTO #locs
+    FROM DataWarehouse.ed.vw_EDAttendanceLocationHistory loc
+    INNER JOIN #att att on att.VisitId = loc.NCAttendanceId
+
+
+    select att.*, 
+    case when LocationSubType = 'Waiting Area' then 'Ambulatory'
+    when LocationSubType = 'Amb Cubicles' then 'Ambulatory'
+    when LocationSubType = 'Minors Paeds' then 'Paediatrics'
+    when LocationSubType = 'Ambulance Bay/HALO' then 'Majors'
+    when LocationSubType = 'Corridor' then 'Majors'
+    when LocationSubType = 'Majors Cubicles' then 'Majors'
+    else LocationSubType end as Pathway
+    from #att att
+    left join #locs locs on locs.NCAttendanceId = att.VisitId
+    and LocationOrder = 1 -----Only get the initial location on arrival
+    WHERE LocationSubType NOT IN ('Minors Paeds', 'Plym')
+    AND LocationSubType IS NOT NULL"""
+    bed_wait = pd.read_sql(bed_wait_query, cl3_engine)
     # ---------------------- Close Connections
     realtime_engine.dispose()
     cl3_engine.dispose()
@@ -430,7 +462,7 @@ group by nerve.NCAttendanceId
     # ------------------------ and create histograms and process durations
     event_diffs = durations.add_difference_in_minutes_to_durations(
                   events_quality, config.where_duration_should_be_0)
-    event_diffs = durations.add_imaging_timings(event_diffs, imaging_raw)
+    event_diffs = durations.add_additional_timings(event_diffs, imaging_raw, bed_wait)
 
     #Max threshold 14 hours, and config.quantile_threshold percentile"
     durations.main_generate_histogram_and_process_durations(
