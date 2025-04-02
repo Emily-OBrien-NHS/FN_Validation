@@ -42,9 +42,9 @@ def add_additional_timings(event_diffs, imaging_raw, bed_wait):
         .dt.total_seconds() / 60)
     image_times["Event (Pathway)"] = image_times["EventName"]
     ####Wait for Bed
-    bed_wait["diffMinutes"] = pd.to_timedelta(bed_wait["BedReadyDateTime"]
-                                              - bed_wait["BedRequestedDateTime"]
-                                              ).dt.total_seconds() / 60
+#    bed_wait["diffMinutes"] = pd.to_timedelta(bed_wait["BedReadyDateTime"]
+ #                                             - bed_wait["BedRequestedDateTime"]
+  #                                            ).dt.total_seconds() / 60
     bed_wait["Event (Pathway)"] = "Wait for Bed - " + bed_wait["EventName"] + " (" + bed_wait['Pathway'] + ")"
     bed_wait = bed_wait.dropna(subset="diffMinutes")
     ####CONCAT
@@ -128,7 +128,8 @@ def generate_and_output_process_durations_log_normal(directory_path, plot_path,
     for process in processes:
         #get the data for that process, with 0s removed
         data = (processed_events.loc[
-                           (processed_events["Event (Pathway)"] == str(process))
+                            (processed_events["Event"] == str(process))
+                          # (processed_events["Event (Pathway)"] == str(process))
                            & (processed_events['diffMinutes'] > 0),
                            "diffMinutes"].copy().dropna().astype(float))
         if process != "" and len(data) > 0:
@@ -210,6 +211,11 @@ def main_generate_histogram_and_process_durations(
                  processed_events['diffMinutes']))
     processed_events = processed_events.drop('TreatRepeat', axis=1)
     #Log normal distributions for each process
-    processes = processed_events["Event (Pathway)"].unique().tolist()
+    processed_events['Event'] = (processed_events['Event (Pathway)']
+                                 .apply(lambda x: ' '.join(x.split(' ')[:-1]))
+                                 .replace('', np.nan)
+                                 .fillna(processed_events['Event (Pathway)']))
+    processes = processed_events['Event'].unique().tolist()
+    #processes = processed_events["Event (Pathway)"].unique().tolist()
     generate_and_output_process_durations_log_normal(output_path, plot_folder_path,
                                                      processed_events, processes)
