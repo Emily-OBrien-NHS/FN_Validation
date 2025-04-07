@@ -9,8 +9,8 @@ import config
 #-------------------supporting process durations functions---------------------#
 ################################################################################
 
-def add_difference_in_minutes_to_durations(events_quality,
-                                           where_duration_should_be_0):
+def add_difference_in_minutes_to_durations(events_quality):#,
+                                          # where_duration_should_be_0):
     #Function to add in the time difference between each event
     #----
     # Take a copy before processing and exclude unknown staff.
@@ -23,8 +23,8 @@ def add_difference_in_minutes_to_durations(events_quality,
                                 ["EventTime"].diff().shift(-1))
     event_diffs["diffMinutes"] = (pd.to_timedelta(event_diffs["time_diff"])
                                   .dt.total_seconds() / 60)
-    event_diffs.loc[event_diffs["EventName"].isin(where_duration_should_be_0)
-                    & event_diffs["diffMinutes"].isna(), "diffMinutes"] = 0
+#    event_diffs.loc[event_diffs["EventName"].isin(where_duration_should_be_0)
+ #                   & event_diffs["diffMinutes"].isna(), "diffMinutes"] = 0
     return event_diffs
 
 def add_additional_timings(event_diffs, imaging_raw, bed_wait):
@@ -215,7 +215,11 @@ def main_generate_histogram_and_process_durations(
                                  .apply(lambda x: ' '.join(x.split(' ')[:-1]))
                                  .replace('', np.nan)
                                  .fillna(processed_events['Event (Pathway)']))
-    processes = processed_events['Event'].unique().tolist()
+    #List of events to work out timings for (if not manually added)
+    processes = [process for process 
+                in processed_events['Event'].unique().tolist()
+                if process not in config.manual_process_timings]
+
     #processes = processed_events["Event (Pathway)"].unique().tolist()
     generate_and_output_process_durations_log_normal(output_path, plot_folder_path,
                                                      processed_events, processes)

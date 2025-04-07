@@ -9,7 +9,7 @@ other_input_filepath = "G:/PerfInfo/Performance Management/PIT Adhocs/2024-2025/
 #######################THRESHOLD VARIABLES#######################
 collapse_diagnostics_within_time = pd.Timedelta("5m")
 transition_threshold = 2
-quantile_threshold = 0.97
+quantile_threshold = 1.0
 repeat_time_threshold = 10
 
 #############################BOOLS###############################
@@ -35,11 +35,12 @@ event_names_to_exclude_for_repetition = ["Triaged", "Discharged", "Booked In",
                                          "Ambulance Arrival", "Walk-In",
                                          "Admitted - Other Derriford Ward",
                                          "Admitted - MAU", "Admitted - SDEC"]
-where_duration_should_be_0 = ["Walk-In",
-                              "Admitted - Other Derriford Ward",
-                              "Admitted - MAU", "Admitted - SDEC", "Discharged",
-                              "Triaged - Kickoff 60 min Obs",
-                              "Triaged - Kickoff 30 min Obs", "Spawn", "Removed"]
+#where_duration_should_be_0 = ["Walk-In",
+ #                             "Admitted - Other Derriford Ward",
+  #                            "Admitted - MAU", "Admitted - SDEC", "Discharged",
+   #                           "Admitted",
+    #                          "Triaged - Kickoff 60 min Obs",
+     #                         "Triaged - Kickoff 30 min Obs", "Spawn", "Removed"]
 imaging_events = ["Radiology", "CT", "MRI", "Ultrasound"]
 locations_pathway_map = {"Ambulance": "Majors",
                          "Ambulatory Cubicles": "Ambulatory",
@@ -58,7 +59,11 @@ location_opening_hours = {'Location':[], 'Day of Week':[], 'Start Time':[],
                           'End Time':[], 'Notes':[]}
 #Process Durations that are manually added
 # process : [mean, std, min, max]
-add_process_durs = {'CT':[20, 10, 10, 40],
+add_process_durs = {#'Admitted':[0, 0, 0, 0],
+                    #'Discharged':[0, 0, 0, 0],
+                    'Triaged':[10, 6, 1, 40],
+                    'Booked In':[3, 2, 1, 10],
+                    'CT':[20, 10, 10, 40],
                     'Radiology':[10, 5, 5, 30],
                     'Obs 60 min (Ambulatory)':[10, 1, 5, 20],
                     'Obs 60 min (Resus)':[10, 1, 5, 20],
@@ -66,7 +71,15 @@ add_process_durs = {'CT':[20, 10, 10, 40],
                     'Obs 30 min (Resus)':[10, 1, 5, 20],
                     'Obs 30 min (Majors)':[10, 1, 5, 20],
                     'Misc Assessment' : [10, 5, 5, 30]}
-proc_durs_0 = ['Walk-In (Ambulatory)',
+proc_durs_0 = ['Admitted (Minors)',
+               'Admitted (Ambulatory)',
+               'Admitted (Majors)',
+               'Admitted (Resus)',
+               'Discharged (Minors)',
+               'Discharged (Ambulatory)',
+               'Discharged (Majors)',
+               'Discharged (Resus)',
+               'Walk-In (Ambulatory)',
                'Walk-In (Majors)',
                'Walk-In (Minors)',
                'Walk-In (Resus)',
@@ -77,6 +90,8 @@ proc_durs_0 = ['Walk-In (Ambulatory)',
 #Put 0 time processes into dictionary to be added
 for process in proc_durs_0:
     add_process_durs[process]  = [0, np.nan, np.nan, np.nan]
+
+manual_process_timings = set([proc.split(' (')[0] for proc in add_process_durs.keys()])
 #list of the new events to add after triage to kick off repeated obs and their
 #probabilities.
 #[(From Event, To Event, Probability, Recurrent Process)]

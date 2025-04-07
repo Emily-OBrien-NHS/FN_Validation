@@ -461,13 +461,13 @@ group by nerve.NCAttendanceId
     # ------------------------ Calculate the duration of each event in the data
     # ------------------------ and create histograms and process durations
     event_diffs = durations.add_difference_in_minutes_to_durations(
-                  events_quality, config.where_duration_should_be_0)
+                  events_quality)#, config.where_duration_should_be_0)
     event_diffs = durations.add_additional_timings(event_diffs, imaging_raw, bed_wait)
 
-    #Max threshold 14 hours, and config.quantile_threshold percentile"
+    #Max threshold 2 hours, and config.quantile_threshold percentile"
     durations.main_generate_histogram_and_process_durations(
               event_diffs, treat_repeat, config.output_path,
-              [durations.within_threshold_diff(840),
+              [durations.within_threshold_diff(120),
                durations.within_diff_quantile(config.quantile_threshold)])
     
     # ------------------------Other filtering options, replace list of functions
