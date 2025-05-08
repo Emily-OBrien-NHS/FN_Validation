@@ -48,13 +48,13 @@ writer.close()
 
 
 #Majors HCAs
-#Majors_HCAS_average_hourly = (average_hourly.loc[
- #                            average_hourly['Staff'].str.contains("HCA (Majors)",
-  #                                                                regex=False)]
-   #                          .set_index(['Staff', 'Hour'])
-    #                         .sort_values(by='Hour'))
-#Majors_HCAS_average_hourly[[col for col in Majors_HCAS_average_hourly.columns
- #                           if Majors_HCAS_average_hourly.sum()[col] > 0]]
+Majors_HCAS_average_hourly = (average_hourly.loc[
+                             average_hourly['Staff'].str.contains("HCA (Majors)",
+                                                                  regex=False)]
+                             .set_index(['Staff', 'Hour'])
+                             .sort_values(by='Hour'))
+Majors_HCAS_average_hourly[[col for col in Majors_HCAS_average_hourly.columns
+                            if Majors_HCAS_average_hourly.sum()[col] > 0]]
 
-#Majors_HCAS_average_time = average_staff_time.loc[average_staff_time['Staff'].str.contains("HCA (Majors)",
- #                                                                 regex=False)].pivot(index=['Staff', 'Hour'], columns='Process', values='Time').plot()
+Majors_HCAS_average_time = average_staff_time.loc[average_staff_time['Staff'].str.contains("HCA (Majors)",
+                                                                  regex=False)].pivot(index=['Staff', 'Hour'], columns='Process', values='Time').plot()

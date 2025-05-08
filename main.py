@@ -373,7 +373,8 @@ group by nerve.NCAttendanceId
     """
     imaging_raw = pd.read_sql(imaging_query, cl3_engine)
     # ---------------------- Wait for Bed data
-    bed_wait_query = """SELECT NCAttendanceId AS VisitId, DATEDIFF(MINUTE, BedRequestedDateTime, BedReadyDateTime) AS diffMinutes,
+    bed_wait_query = """SELECT NCAttendanceId AS VisitId,
+    DATEDIFF(MINUTE, BedRequestedDateTime, BedReadyDateTime) AS diffMinutes,
     CASE WHEN admitprvsprefno IS NOT NULL AND ActualDischargeDestinationWardCode IN ('rk950aau','rk950aau01', 'rk950afu') THEN 'Admitted - SDEC'
     WHEN admitprvsprefno IS NOT NULL AND ActualDischargeDestinationWardCode IN ('rk950mau','rk950amw') THEN 'Admitted - MAU'
     WHEN admitprvsprefno IS NOT NULL AND ActualDischargeDestinationWardCode LIKE 'rk950%' THEN 'Admitted - Other Derriford Ward'
@@ -446,12 +447,13 @@ group by nerve.NCAttendanceId
     #bools are set toFale, True.  If both False, no filtering occurs, and if
     #True, False then any patient who has a transition below Threshold%
     # is removed.
-    pathways.main_generate_dfg_and_pathway_definitions(transitions,
-                 config.output_path, config.include_spawn_end_events,
-                 config.obs_splits, config.export_event_log_csv,
-                 config.export_log_to_csv_after_using_log_converter,
-                 config.pathways_wait_in_place, config.transition_threshold, 
-                 False, True, "EventName", "Pathway")
+    post_imaging = pathways.main_generate_dfg_and_pathway_definitions(
+                   transitions, config.output_path,
+                   config.include_spawn_end_events, config.obs_splits,
+                   config.post_imaging_events, config.export_event_log_csv,
+                   config.export_log_to_csv_after_using_log_converter,
+                   config.pathways_wait_in_place, config.transition_threshold,
+                   False, True, "EventName", "Pathway")
 
 
 ################################################################################
@@ -462,11 +464,12 @@ group by nerve.NCAttendanceId
     # ------------------------ and create histograms and process durations
     event_diffs = durations.add_difference_in_minutes_to_durations(
                   events_quality)#, config.where_duration_should_be_0)
-    event_diffs = durations.add_additional_timings(event_diffs, imaging_raw, bed_wait)
+    event_diffs = durations.add_additional_timings(event_diffs, imaging_raw,
+                                                   bed_wait)
 
     #Max threshold 2 hours, and config.quantile_threshold percentile"
     durations.main_generate_histogram_and_process_durations(
-              event_diffs, treat_repeat, config.output_path,
+              event_diffs, treat_repeat, post_imaging, config.output_path,
               [durations.within_threshold_diff(120),
                durations.within_diff_quantile(config.quantile_threshold)])
     

@@ -109,6 +109,32 @@ def add_obs_repeat_splits(pathway_definition, obs_splits):
                                     pathway_definition])
     return pathway_definition
 
+def add_post_imaging_event(pathway_definitions, post_imaging_events):
+    #get all the xray and ct from and to processess
+    imaging_events = pathway_definitions.loc[
+                     pathway_definitions['From Process']
+                     .str.contains('|'.join(post_imaging_events))].copy()
+    #Remove these rows from the pathway
+    pathway_definitions = pathway_definitions.loc[~pathway_definitions.index
+                                             .isin(imaging_events.index)].copy()
+    #Insert new post imaging event after from process
+    imaging = imaging_events['From Process'].drop_duplicates()
+    post_imaging = ['Post ' + event for event in imaging]
+    to_post_imaging = pd.DataFrame({'From Process':imaging,
+                                    'To Process':post_imaging,
+                                    'Percentage':[100]*len(imaging),
+                                    'Notes':(['To Post Imaging Event']
+                                             *len(imaging))})
+    #Now change the names of the From process in the original imaging events
+    #to be Post Image to the next event in the pathway
+    imaging_events['From Process'] = 'Post ' + imaging_events['From Process']
+    imaging_events['Notes'] = 'From Post Imaging Event'
+    #Add new events back to pathway definition
+    pathway_definitions = pd.concat([pathway_definitions, to_post_imaging,
+                                     imaging_events])
+    return pathway_definitions, post_imaging
+    
+
 def create_process_recurrence(obs_splits):
     #Function to create the process recurrence outputs.
     #----
@@ -261,7 +287,7 @@ def remove_transitions_below_percentage(pathway_definitions, threshold):
 ################################################################################
 
 def main_generate_dfg_and_pathway_definitions(events_data,
-    filepath, include_spawn_end_events, obs_splits, export_event_log_csv,
+    filepath, include_spawn_end_events, obs_splits, post_imaging_events, export_event_log_csv,
     export_log_to_csv_after_using_log_converter, pathways_wait_in_place,
     threshold, threshold_exclude, percentage_exclude,
     process_column="Event (Pathway)", split_column=" "):
@@ -274,11 +300,14 @@ def main_generate_dfg_and_pathway_definitions(events_data,
                       events_data, threshold)
         events_data = add_reset_transitions(events_data)
     #save the events data to csv
-    events_data.to_csv((filepath + "/Additional Outputs/Events Data.csv"), index=False)
+    events_data.to_csv((filepath + "/Additional Outputs/Events Data.csv"),
+                       index=False)
     #get pathway definitions and add in the triage obs events.
     pathway_definitions = generate_pathway_definitions(events_data,
                                                        include_spawn_end_events)
     pathway_definitions = add_obs_repeat_splits(pathway_definitions, obs_splits)
+    pathway_definitions, post_imaging = add_post_imaging_event(
+                                       pathway_definitions, post_imaging_events)
     #Create process recurrence outputs
     process_recurrence_triggers, process_recurrence = create_process_recurrence(
                                                       obs_splits)
@@ -322,3 +351,5 @@ def main_generate_dfg_and_pathway_definitions(events_data,
         dfg_visualizer.save(gviz, (filepath
                                    + "/Additional Outputs/Flow Diagrams/"
                                    + f"{key}.png"))
+    
+    return post_imaging

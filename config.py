@@ -57,6 +57,16 @@ excluded_event_names = ["Clinically Ready to Proceed"]
 locations_to_drop = ["Paediatrics", "Plym"]
 location_opening_hours = {'Location':[], 'Day of Week':[], 'Start Time':[],
                           'End Time':[], 'Notes':[]}
+#Events to add for post imaging and locations to return to
+# [(location, priority),]
+post_imaging_events = ["Radiology", "CT"]
+maj_locations = [("Majors Bays", 1),
+                 ("Majors Cubicles", 1),
+                 ("Majors Corridor", 2),
+                 ("Ambulance", 3)]
+res_locations = [("Resus Bays", 1),
+                 ("Ambulance", 3)]
+
 #Process Durations that are manually added
 # process : [mean, std, min, max]
 add_process_durs = {#'Admitted':[0, 0, 0, 0],

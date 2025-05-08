@@ -120,7 +120,8 @@ def timings_dict(process, mean, std, min_, max_, note):
 
 def generate_and_output_process_durations_log_normal(directory_path, plot_path,
                                                      processed_events,
-                                                     processes):
+                                                     processes, add_process_durs):
+
     #Function to fit a log normal distribution to the data
     #----
     #fit a log normal to each process data
@@ -167,7 +168,7 @@ def generate_and_output_process_durations_log_normal(directory_path, plot_path,
                                             np.nan))
 
     #----Add in manually added process timings
-    for process, times in config.add_process_durs.items():
+    for process, times in add_process_durs.items():
         mean, std, min_, max_ = times
         #If event doesn't belong to a pathway, add this in
         if '(' not in process:
@@ -191,7 +192,7 @@ def generate_and_output_process_durations_log_normal(directory_path, plot_path,
 ################################################################################
 
 def main_generate_histogram_and_process_durations(
-    processed_events, treat_repeat, output_path, filterFuncs=None):
+    processed_events, treat_repeat, post_imaging, output_path, filterFuncs=None):
     #Main function to fit lognormals, plot distributions if required and output
     #the process durations input file.
     #----
@@ -215,11 +216,19 @@ def main_generate_histogram_and_process_durations(
                                  .apply(lambda x: ' '.join(x.split(' ')[:-1]))
                                  .replace('', np.nan)
                                  .fillna(processed_events['Event (Pathway)']))
+    
+    #Put together list of manually added timings
+    add_process_durs = config.add_process_durs
+    for process in (config.proc_durs_0 + post_imaging):
+        add_process_durs[process]  = [0, np.nan, np.nan, np.nan]
+    #Get list of the events we're manualling adding, so we don't work out
+    #timings from the events file.
+    manual_process_timings = set([proc.split(' (')[0] for proc
+                                  in add_process_durs.keys()])
     #List of events to work out timings for (if not manually added)
     processes = [process for process 
                 in processed_events['Event'].unique().tolist()
-                if process not in config.manual_process_timings]
-
-    #processes = processed_events["Event (Pathway)"].unique().tolist()
-    generate_and_output_process_durations_log_normal(output_path, plot_folder_path,
-                                                     processed_events, processes)
+                if process not in manual_process_timings]
+    generate_and_output_process_durations_log_normal(
+                    output_path, plot_folder_path, processed_events, processes,
+                    add_process_durs)

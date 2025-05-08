@@ -71,11 +71,26 @@ def remove_repeats_of_events_that_should_not_be_repeated(events_quality,
     events_quality = events_quality.loc[~duplicate_events_mask].copy()
     return events_quality
 
+def remove_events_before_arrival(events_quality):
+    #Remove events that happen before an arrival event. Sort in reverse order
+    events_quality = events_quality.sort_values(by=["VisitId", "EventTime"],
+                                                ascending=False)
+    events_quality["target_event"] = (events_quality["EventName"]
+                                                        == "Ambulance Arrival")
+    events_quality["after_target_event"] = (events_quality.groupby("VisitId")
+                                        ["target_event"].cumsum().astype(bool))
+    events_quality = (events_quality.loc[~(events_quality["after_target_event"])
+                                    | (events_quality["target_event"])].copy()
+                      .drop(columns=["target_event", "after_target_event"]))
+    return events_quality
+
 def remove_events_after_discharged(events_quality):
     #Remove any events that happen after discharge
     events_quality = events_quality.sort_values(by=["VisitId", "EventTime"])
-    events_quality["target_event"] = ((events_quality["EventName"] == "Discharged")
-                                      | (events_quality['EventName'].str.contains('Admitted')))
+    events_quality["target_event"] = ((events_quality["EventName"]
+                                         == "Discharged")
+                                      | (events_quality['EventName'].str
+                                         .contains('Admitted')))
     events_quality["after_target_event"] = (events_quality.groupby("VisitId")
                                         ["target_event"].cumsum().astype(bool))
     events_quality = (events_quality.loc[~(events_quality["after_target_event"])
@@ -282,10 +297,11 @@ def main_cleanse_and_transform_data(events_quality,
     #Main function to apply all cleaning and transformation functions onto the
     #input data
     #----
+    events_quality = remove_events_before_arrival(events_quality)
+    events_quality = remove_events_after_discharged(events_quality)
     #remove repeated or 'non real' events
     events_quality = (remove_repeats_of_events_that_should_not_be_repeated(
                        events_quality, event_names_to_exclude_for_repetition))
-    events_quality = remove_events_after_discharged(events_quality)
     events_quality = remove_senior_review_if_seen_by(events_quality)
     #fill in missing locations and remove locations/events for removal
     events_quality = set_location_for_ambulance_arrival(events_quality)
