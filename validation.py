@@ -15,6 +15,7 @@ def print_missing(def_str, list, output_str):
     return output_str
 
 def validation_process(scenario_filepath):
+    os.chdir(scenario_filepath)
     output_text = ''
     outputs_filepath = scenario_filepath + '/Validation'
 

@@ -222,9 +222,7 @@ def pathway_wait_in_place(pathway_definitions, pathways_wait_in_place,
               .drop_duplicates().dropna().to_list())
     wip_processes = from_col + to_col
     #Add the list of repeated processes to the wip list
-    wip_processes += [process for process in recurrent_processes if
-                      any([pathway in process for pathway
-                           in pathways_wait_in_place])]
+    wip_processes += recurrent_processes
     #Create and return wait in place dataframe
     wip_processes = list(set(wip_processes))
     wait_in_place = pd.DataFrame(

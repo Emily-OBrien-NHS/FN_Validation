@@ -35,12 +35,6 @@ event_names_to_exclude_for_repetition = ["Triaged", "Discharged", "Booked In",
                                          "Ambulance Arrival", "Walk-In",
                                          "Admitted - Other Derriford Ward",
                                          "Admitted - MAU", "Admitted - SDEC"]
-#where_duration_should_be_0 = ["Walk-In",
- #                             "Admitted - Other Derriford Ward",
-  #                            "Admitted - MAU", "Admitted - SDEC", "Discharged",
-   #                           "Admitted",
-    #                          "Triaged - Kickoff 60 min Obs",
-     #                         "Triaged - Kickoff 30 min Obs", "Spawn", "Removed"]
 imaging_events = ["Radiology", "CT", "MRI", "Ultrasound"]
 locations_pathway_map = {"Ambulance": "Majors",
                          "Ambulatory Cubicles": "Ambulatory",
@@ -69,9 +63,7 @@ res_locations = [("Resus Bays", 1),
 
 #Process Durations that are manually added
 # process : [mean, std, min, max]
-add_process_durs = {#'Admitted':[0, 0, 0, 0],
-                    #'Discharged':[0, 0, 0, 0],
-                    'Triaged':[10, 6, 1, 40],
+add_process_durs = {'Triaged':[10, 6, 1, 40],
                     'Booked In':[3, 2, 1, 10],
                     'CT':[20, 10, 10, 40],
                     'Radiology':[10, 5, 5, 30],

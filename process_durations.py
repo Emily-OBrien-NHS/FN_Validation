@@ -23,8 +23,6 @@ def add_difference_in_minutes_to_durations(events_quality):#,
                                 ["EventTime"].diff().shift(-1))
     event_diffs["diffMinutes"] = (pd.to_timedelta(event_diffs["time_diff"])
                                   .dt.total_seconds() / 60)
-#    event_diffs.loc[event_diffs["EventName"].isin(where_duration_should_be_0)
- #                   & event_diffs["diffMinutes"].isna(), "diffMinutes"] = 0
     return event_diffs
 
 def add_additional_timings(event_diffs, imaging_raw, bed_wait):
@@ -42,10 +40,8 @@ def add_additional_timings(event_diffs, imaging_raw, bed_wait):
         .dt.total_seconds() / 60)
     image_times["Event (Pathway)"] = image_times["EventName"]
     ####Wait for Bed
-#    bed_wait["diffMinutes"] = pd.to_timedelta(bed_wait["BedReadyDateTime"]
- #                                             - bed_wait["BedRequestedDateTime"]
-  #                                            ).dt.total_seconds() / 60
-    bed_wait["Event (Pathway)"] = "Wait for Bed - " + bed_wait["EventName"] + " (" + bed_wait['Pathway'] + ")"
+    bed_wait["Event (Pathway)"] = ("Wait for Bed - " + bed_wait["EventName"]
+                                   + " (" + bed_wait['Pathway'] + ")")
     bed_wait = bed_wait.dropna(subset="diffMinutes")
     ####CONCAT
     #Concat this back onto the events file
