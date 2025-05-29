@@ -51,6 +51,8 @@ excluded_event_names = ["Clinically Ready to Proceed"]
 locations_to_drop = ["Paediatrics", "Plym"]
 location_opening_hours = {'Location':[], 'Day of Week':[], 'Start Time':[],
                           'End Time':[], 'Notes':[]}
+#Medication % splits
+medication_splits = {'Majors':100, 'Resus':100, 'Ambulatory':80}
 #Events to add for post imaging and locations to return to
 # [(location, priority),]
 post_imaging_events = ["Radiology", "CT"]
@@ -72,6 +74,9 @@ add_process_durs = {'Triaged':[10, 6, 1, 40],
                     'Obs 60 min (Majors)':[10, 1, 5, 20],
                     'Obs 30 min (Resus)':[10, 1, 5, 20],
                     'Obs 30 min (Majors)':[10, 1, 5, 20],
+                    'Medications (Ambulatory)':[10, 1, 5, 20],
+                    'Medications (Majors)':[10, 1, 5, 20],
+                    'Medications (Resus)':[10, 1, 5, 20],
                     'Misc Assessment' : [10, 5, 5, 30]}
 proc_durs_0 = ['Admitted (Minors)',
                'Admitted (Ambulatory)',
@@ -85,6 +90,7 @@ proc_durs_0 = ['Admitted (Minors)',
                'Walk-In (Majors)',
                'Walk-In (Minors)',
                'Walk-In (Resus)',
+               'Triaged - Kickoff 60 min Obs (Ambulatory)',
                'Triaged - Kickoff 60 min Obs (Majors)',
                'Triaged - Kickoff 30 min Obs (Majors)',
                'Triaged - Kickoff 60 min Obs (Resus)',
@@ -97,8 +103,9 @@ manual_process_timings = set([proc.split(' (')[0] for proc in add_process_durs.k
 #list of the new events to add after triage to kick off repeated obs and their
 #probabilities.
 #[(From Event, To Event, Probability, Recurrent Process)]
-#From Event is nan if no kickoff event required to start the repeated process.
-obs_splits = [(np.nan, 'Triaged (Ambulatory)', 100, 'Obs 60 min (Ambulatory)'),
+obs_splits = [('Triaged (Ambulatory)',
+               'Triaged - Kickoff 60 min Obs (Ambulatory)', 100,
+               'Obs 60 min (Ambulatory)'),
               ('Triaged (Majors)', 'Triaged - Kickoff 60 min Obs (Majors)', 85,
                'Obs 60 min (Majors)'),
               ('Triaged (Majors)', 'Triaged - Kickoff 30 min Obs (Majors)', 15,
@@ -107,6 +114,15 @@ obs_splits = [(np.nan, 'Triaged (Ambulatory)', 100, 'Obs 60 min (Ambulatory)'),
                'Obs 60 min (Resus)'),
               ('Triaged (Resus)', 'Triaged - Kickoff 30 min Obs (Resus)', 40,
                'Obs 30 min (Resus)')]
+medication_splits = [('Triaged - Kickoff 60 min Obs (Ambulatory)', 80, 'Medications (Ambulatory)'),
+                     ('Triaged - Kickoff 60 min Obs (Majors)', 100,
+                      'Medications (Majors)'),
+                     ('Triaged - Kickoff 30 min Obs (Majors)', 100,
+                      'Medications (Majors)'),
+                     ('Triaged - Kickoff 60 min Obs (Resus)', 100,
+                      'Medications (Resus)'),
+                     ('Triaged - Kickoff 30 min Obs (Resus)', 100,
+                      'Medications (Resus)')]
 
 ########################PROCESS ORDER########################
 natural_order_for_processes = { "Spawn": 0,

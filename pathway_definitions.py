@@ -135,17 +135,20 @@ def add_post_imaging_event(pathway_definitions, post_imaging_events):
     return pathway_definitions, post_imaging
     
 
-def create_process_recurrence(obs_splits):
+def create_process_recurrence(obs_splits, medication_splits):
     #Function to create the process recurrence outputs.
     #----
     #Create the process recurrence triggers output.
-    process_recur_triggers = pd.DataFrame([lst[1:] for lst in obs_splits],
+    proc_rec = [lst[1:] for lst in obs_splits] + medication_splits
+    process_recur_triggers = pd.DataFrame(proc_rec,
                                   columns=['Trigger Process (In Pathway)',
                                           'Probability (%)',
                                           'Recurrent Process (Not In Pathway)'])
     #As we've added in kick-off events in the pathway to do probability splits,
     #all probabilites here are 100%
-    process_recur_triggers['Probability (%)'] = 100
+    process_recur_triggers.loc[
+        process_recur_triggers['Recurrent Process (Not In Pathway)']
+        .str.contains('Obs'), 'Probability (%)'] = 100
     process_recur_triggers['Notes'] = np.nan
     #Rearrange columns
     process_recur_triggers = process_recur_triggers[[
@@ -155,9 +158,11 @@ def create_process_recurrence(obs_splits):
     #Create the process recurrence output.
     process_recur = pd.DataFrame(process_recur_triggers
                                  ['Recurrent Process (Not In Pathway)']
-                                 .rename('Recurrent Process'))
+                                 .rename('Recurrent Process')).drop_duplicates()
+    #get the obs recurrence from the process name.  120 is a placeholder for
+    #medication recurrence
     process_recur['Recurrence Mean'] = (process_recur['Recurrent Process'].str
-                                        .extract(r'(\d+)').astype(int))
+                                        .extract(r'(\d+)').fillna(120).astype(int))
     process_recur['StdDev'] = (round(0.1 * process_recur['Recurrence Mean'])
                                .astype(int))
     process_recur['Min'] = 5
@@ -213,16 +218,15 @@ def pathway_wait_in_place(pathway_definitions, pathways_wait_in_place,
     #Function to create the list of wait in place processes as an output.
     #----
     #Filter the from and to processess to only those in a wait in place pathway.
-    #Get a list of these with no duplicates
+    #Get a list of these with no duplicates. Also add recurrent processes.
     from_col = (pathway_definitions.loc[pathway_definitions['From Process']
                 .str.contains('|'.join(pathways_wait_in_place)), 'From Process']
                 .drop_duplicates().dropna().to_list())
     to_col = (pathway_definitions.loc[pathway_definitions['To Process']
               .str.contains('|'.join(pathways_wait_in_place)), 'From Process']
               .drop_duplicates().dropna().to_list())
-    wip_processes = from_col + to_col
-    #Add the list of repeated processes to the wip list
-    wip_processes += recurrent_processes
+    recurr = recurrent_processes['Recurrent Process'].to_list()
+    wip_processes = from_col + to_col + recurr
     #Create and return wait in place dataframe
     wip_processes = list(set(wip_processes))
     wait_in_place = pd.DataFrame(
@@ -285,7 +289,7 @@ def remove_transitions_below_percentage(pathway_definitions, threshold):
 ################################################################################
 
 def main_generate_dfg_and_pathway_definitions(events_data,
-    filepath, include_spawn_end_events, obs_splits, post_imaging_events, export_event_log_csv,
+    filepath, include_spawn_end_events, obs_splits, medication_splits, post_imaging_events, export_event_log_csv,
     export_log_to_csv_after_using_log_converter, pathways_wait_in_place,
     threshold, threshold_exclude, percentage_exclude,
     process_column="Event (Pathway)", split_column=" "):
@@ -308,7 +312,7 @@ def main_generate_dfg_and_pathway_definitions(events_data,
                                        pathway_definitions, post_imaging_events)
     #Create process recurrence outputs
     process_recurrence_triggers, process_recurrence = create_process_recurrence(
-                                                      obs_splits)
+                                                      obs_splits, medication_splits)
     process_recurrence_triggers.to_csv(
         (filepath + "/Process Recurrence Triggers.csv"), index=False)
     process_recurrence.to_csv(
@@ -326,7 +330,7 @@ def main_generate_dfg_and_pathway_definitions(events_data,
     #Create and save process wait in place.
     wait_in_place = pathway_wait_in_place(pathway_definitions,
                                           pathways_wait_in_place,
-                                          [lst[3] for lst in obs_splits])
+                                          process_recurrence)
     wait_in_place.to_csv(filepath + "/Process Wait in Place.csv", index=False)
     #Create log files and dfgs
     if split_column is None:

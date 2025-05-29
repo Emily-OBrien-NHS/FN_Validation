@@ -449,7 +449,7 @@ group by nerve.NCAttendanceId
     # is removed.
     post_imaging = pathways.main_generate_dfg_and_pathway_definitions(
                    transitions, config.output_path,
-                   config.include_spawn_end_events, config.obs_splits,
+                   config.include_spawn_end_events, config.obs_splits, config.medication_splits,
                    config.post_imaging_events, config.export_event_log_csv,
                    config.export_log_to_csv_after_using_log_converter,
                    config.pathways_wait_in_place, config.transition_threshold,
