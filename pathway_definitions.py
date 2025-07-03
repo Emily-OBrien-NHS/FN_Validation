@@ -135,7 +135,7 @@ def add_post_imaging_event(pathway_definitions, post_imaging_events):
     return pathway_definitions, post_imaging
     
 
-def create_process_recurrence(obs_splits, medication_splits):
+def create_process_recurrence(obs_splits, medication_splits, time_between_medications):
     #Function to create the process recurrence outputs.
     #----
     #Create the process recurrence triggers output.
@@ -162,7 +162,7 @@ def create_process_recurrence(obs_splits, medication_splits):
     #get the obs recurrence from the process name.  120 is a placeholder for
     #medication recurrence
     process_recur['Recurrence Mean'] = (process_recur['Recurrent Process'].str
-                                        .extract(r'(\d+)').fillna(120).astype(int))
+                                        .extract(r'(\d+)').fillna(time_between_medications).astype(int))
     process_recur['StdDev'] = (round(0.1 * process_recur['Recurrence Mean'])
                                .astype(int))
     process_recur['Min'] = 5
@@ -289,7 +289,8 @@ def remove_transitions_below_percentage(pathway_definitions, threshold):
 ################################################################################
 
 def main_generate_dfg_and_pathway_definitions(events_data,
-    filepath, include_spawn_end_events, obs_splits, medication_splits, post_imaging_events, export_event_log_csv,
+    filepath, include_spawn_end_events, obs_splits, medication_splits,
+    post_imaging_events, time_between_medications, export_event_log_csv,
     export_log_to_csv_after_using_log_converter, pathways_wait_in_place,
     threshold, threshold_exclude, percentage_exclude,
     process_column="Event (Pathway)", split_column=" "):
@@ -312,7 +313,8 @@ def main_generate_dfg_and_pathway_definitions(events_data,
                                        pathway_definitions, post_imaging_events)
     #Create process recurrence outputs
     process_recurrence_triggers, process_recurrence = create_process_recurrence(
-                                                      obs_splits, medication_splits)
+                                                      obs_splits, medication_splits,
+                                                      time_between_medications)
     process_recurrence_triggers.to_csv(
         (filepath + "/Process Recurrence Triggers.csv"), index=False)
     process_recurrence.to_csv(

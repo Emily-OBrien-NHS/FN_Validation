@@ -74,9 +74,9 @@ add_process_durs = {'Triaged':[10, 6, 1, 40],
                     'Obs 60 min (Majors)':[10, 1, 5, 20],
                     'Obs 30 min (Resus)':[10, 1, 5, 20],
                     'Obs 30 min (Majors)':[10, 1, 5, 20],
-                    'Medications (Ambulatory)':[10, 1, 5, 20],
-                    'Medications (Majors)':[10, 1, 5, 20],
-                    'Medications (Resus)':[10, 1, 5, 20],
+                    'Medications (Ambulatory)':[15, 5, 5, 35],
+                    'Medications (Majors)':[15, 5, 5, 35],
+                    'Medications (Resus)':[15, 5, 5, 35],
                     'Misc Assessment' : [10, 5, 5, 30]}
 proc_durs_0 = ['Admitted (Minors)',
                'Admitted (Ambulatory)',
@@ -123,6 +123,7 @@ medication_splits = [('Triaged - Kickoff 60 min Obs (Ambulatory)', 80, 'Medicati
                       'Medications (Resus)'),
                      ('Triaged - Kickoff 30 min Obs (Resus)', 100,
                       'Medications (Resus)')]
+time_between_medications = 300
 
 ########################PROCESS ORDER########################
 natural_order_for_processes = { "Spawn": 0,

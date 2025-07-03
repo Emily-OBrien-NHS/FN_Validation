@@ -24,8 +24,8 @@ if __name__ == "__main__":
 ################################################################################
 #-------------------------Read in and clense raw data--------------------------#
 ################################################################################
-    start_date = '01-APR-2024 00:00:00'
-    end_date = '30-APR-2024 23:59:59'
+    start_date = '01-APR-2025 00:00:00'
+    end_date = '30-APR-2025 23:59:59'
     # ---------------------- Database Engines
     realtime_engine = create_engine('mssql+pyodbc://@dwrealtime/RealTimeReporting?'\
                            'trusted_connection=yes&driver=ODBC+Driver+17'\
@@ -116,7 +116,7 @@ if __name__ == "__main__":
                     and NoteKey in ('ED Arrival Transport Mode','ED Ambulance Arrival Date/Time'--,'ED Seen By',
                         ,'ED Nurse completing Triage','Manchester Triage Score', 'ED Senior Reviewed'
                         --,'ED Clerking Actual Date/Time'
-                        ,'ED Specialty Reviewed Dt','DTA Actual Date/Time','ED Departure Ready Date/Time','ED Discharge Clinician')
+                        ,'ED Specialty Reviewed Dt','DTA Actual Date/Time','ED Departure Ready Date/Time','ED ECDS Departure Destination')
 
                     ---union nursing assessments data
                     union all
@@ -226,21 +226,20 @@ if __name__ == "__main__":
                         when NoteKey = 'ED Specialty Reviewed Dt' then 'Specialty Reviewed'
                         when NoteKey = 'DTA Actual Date/Time' then 'Decision to Admit'
                         when NoteKey = 'ED Departure Ready Date/Time' then 'Clinically Ready to Proceed'
-                        when NoteKey = 'ED Discharge Clinician' then adm.Adm ---For the discharge event, use formatted admission details from temp table
+                        when NoteKey = 'ED ECDS Departure Destination' then adm.Adm ---For the discharge event, use formatted admission details from temp table
                         end as EventName
                     ----Then get the timestamp
                     ,case when NoteKey in ('ED Ambulance Arrival Date/Time','ED Clerking Actual Date/Time','ED Specialty Reviewed Dt','ED Departure Ready Date/Time')
                             then [NerveCentreFeed].Util.ConvertNCDateNumericToLocalDateTime(NoteValue)
                             when NoteKey = 'ED Arrival Transport Mode' then ArrivalDateTime
-                            when NoteKey = 'ED Discharge Clinician' then DischargeDateTime
+                            when NoteKey = 'ED ECDS Departure Destination' then DischargeDateTime
                         else [timestamp] end as EventTime
                     ----Get staff member
-                    ,case when NoteKey in ('ED Nurse completing Triage'--,'ED Seen By'
-                                        ,'ED Discharge Clinician')
+                    ,case when NoteKey ='ED Nurse completing Triage' 
                                 then NoteValue
                         else AddedBy end as EventStaffMember
                     ----Replace staff names with numbers
-                    ,dense_rank() over  (order by case when NoteKey in ('ED Nurse completing Triage','ED Seen By','ED Nursing Assessment By','ED Discharge Clinician')
+                    ,dense_rank() over  (order by case when NoteKey in ('ED Nurse completing Triage','ED Seen By','ED Nursing Assessment By')
                                 then NoteValue
                         else AddedBy end) as EventStaffId
                     ,case when LocationSubType = 'Waiting Area' then 'Ambulatory Waiting Area'
@@ -258,13 +257,13 @@ if __name__ == "__main__":
                             and case when NoteKey in ('ED Ambulance Arrival Date/Time','ED Clerking Actual Date/Time','ED Specialty Reviewed Dt','ED Departure Ready Date/Time')
                             then [NerveCentreFeed].Util.ConvertNCDateNumericToLocalDateTime(NoteValue)
                             when NoteKey = 'ED Arrival Transport Mode' then note.ArrivalDateTime
-                            when NoteKey = 'ED Discharge Clinician' then note.DischargeDateTime
+                            when NoteKey = 'ED ECDS Departure Destination' then note.DischargeDateTime
                         else [timestamp] end between locs.StartDateTime and locs.EndDateTime
                     --where VisitId = '1395736'
                     --and strikeoutid is NULL ---don't pick up cancelled/overwritten values
                     -- and NoteKey in ('ED Arrival Transport Mode','ED Ambulance Arrival Date/Time','ED Seen By',
                         --'ED Nursing Assessment By','ED Nurse completing Triage','Manchester Triage Score', 'ED Senior Reviewed',
-                        --'ED Clerking Actual Date/Time','ED Specialty Reviewed Dt','DTA Actual Date/Time','ED Departure Ready Date/Time','ED Discharge Clinician')
+                        --'ED Clerking Actual Date/Time','ED Specialty Reviewed Dt','DTA Actual Date/Time','ED Departure Ready Date/Time','ED ECDS Departure Destination')
                     order by VisitId
 
 
@@ -373,7 +372,7 @@ group by nerve.NCAttendanceId
     """
     imaging_raw = pd.read_sql(imaging_query, cl3_engine)
     # ---------------------- Wait for Bed data
-    bed_wait_query = """SELECT NCAttendanceId AS VisitId,
+    bed_wait_query = f"""SELECT NCAttendanceId AS VisitId,
     DATEDIFF(MINUTE, BedRequestedDateTime, BedReadyDateTime) AS diffMinutes,
     CASE WHEN admitprvsprefno IS NOT NULL AND ActualDischargeDestinationWardCode IN ('rk950aau','rk950aau01', 'rk950afu') THEN 'Admitted - SDEC'
     WHEN admitprvsprefno IS NOT NULL AND ActualDischargeDestinationWardCode IN ('rk950mau','rk950amw') THEN 'Admitted - MAU'
@@ -381,7 +380,7 @@ group by nerve.NCAttendanceId
     ELSE 'Non-Admitted' END AS EventName
     INTO #ATT
     FROM [DataWarehouse].[ED].[vw_EDAttendance]
-    WHERE DischargeDateTime BETWEEN '01-Apr-2023 00:00:00' AND '30-Jun-2024 00:00:00'
+    WHERE DischargeDateTime BETWEEN '{start_date}' AND '{end_date}'
     AND ActualDischargeDestinationWardCode  LIKE 'rk950%'
 
 
@@ -450,7 +449,7 @@ group by nerve.NCAttendanceId
     post_imaging = pathways.main_generate_dfg_and_pathway_definitions(
                    transitions, config.output_path,
                    config.include_spawn_end_events, config.obs_splits, config.medication_splits,
-                   config.post_imaging_events, config.export_event_log_csv,
+                   config.post_imaging_events, config.time_between_medications, config.export_event_log_csv,
                    config.export_log_to_csv_after_using_log_converter,
                    config.pathways_wait_in_place, config.transition_threshold,
                    False, True, "EventName", "Pathway")
