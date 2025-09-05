@@ -46,10 +46,11 @@ if __name__ == "__main__":
                             ,DischargeDateTime
                     into #att
                     from [cl3-data].DataWarehouse.ed.vw_EDAttendance
-                    where dischargedatetime between '{start_date}' and '{end_date}'
+                    where dischargedatetime between '01-APR-2025 00:00:00' and '30-APR-2025 23:59:59'
 
                     ----Use location table to get all locations for these attendances
-                    select NCAttendanceId, LocationDescription, LocationSubType, LocationOrder, StartDateTime, EndDateTime
+                    select NCAttendanceId, LocationDescription, LocationOrder, StartDateTime, EndDateTime, --LocationSubType,
+					case when Bed like 'Dart Moor%' then 'Minors' else LocationSubType end as LocationSubType
                     into #locs
                     from [cl3-data].DataWarehouse.ed.vw_EDAttendanceLocationHistory loc 
                     inner join #att att on att.AttendanceID = loc.NCAttendanceId
@@ -69,17 +70,6 @@ if __name__ == "__main__":
                     ---inner join attendances to get only required records
                     inner join #att att on att.AttendanceID = nerve.NCAttendanceId
 
-                    ----Uncomment this bit to get table of where patients arrived to
-                    --select att.*, 
-                    --case when LocationSubType = 'Waiting Area' then 'Ambulatory Waiting Area'
-                    --	when LocationSubType = 'Amb Cubicles' then 'Ambulatory Cubicles'
-                    --	when LocationSubType = 'Minors Paeds' then 'Paediatrics'
-                    --	when LocationSubType = 'Ambulance Bay/HALO' then 'Ambulance'
-                    --	when LocationSubType = 'Corridor' then 'Majors Corridor'
-                    --	else LocationSubType end as InitialLocation
-                    --from #att att
-                    --left join #locs locs on locs.NCAttendanceId = att.AttendanceID
-                    --				and LocationOrder = 1 -----Only get the initial location on arrival
 
                     ---Before getting the events table, need to pull through
                     ----first clinician contact - agreed with Nanette to choose the first of either seen by, clerking or senior review 
@@ -158,7 +148,6 @@ if __name__ == "__main__":
                             ,'Treatment'
                             ,TaskCategory
                             ,[CompletedDateTime]
-                            --,TreatmentNumber = 'Treatment' + cast(ROW_NUMBER () over(partition by NCattendanceID order by [CompletedDateTime] asc) as varchar
                             ,AddedBY = [ClosedByUsername]
                             ,att.ArrivalDateTime, att.DischargeDateTime 
                     FROM [NerveCentreFeed].[ED].[vw_EDTask] task
@@ -248,55 +237,16 @@ if __name__ == "__main__":
                         when LocationSubType = 'Ambulance Bay/HALO' then 'Ambulance'
                         when LocationSubType = 'Corridor' then 'Majors Corridor'
                         else LocationSubType end as EventLocation	  
-                    --,NoteKey, NoteValue, [timestamp],AddedBy
-                    FROM #events note--[NerveCentreFeed].[Note].[ClinicalNoteHistory] note
+                    FROM #events note
                     ---join admission status
                     left join #adm adm on adm.ncattendanceID = note.VisitId
-                    --inner join #att att on att.AttendanceID = note.VisitId ---only get attendances within timeframe
                     left join #locs locs on locs.NCAttendanceId = note.VisitId ---get location at event time
                             and case when NoteKey in ('ED Ambulance Arrival Date/Time','ED Clerking Actual Date/Time','ED Specialty Reviewed Dt','ED Departure Ready Date/Time')
                             then [NerveCentreFeed].Util.ConvertNCDateNumericToLocalDateTime(NoteValue)
                             when NoteKey = 'ED Arrival Transport Mode' then note.ArrivalDateTime
                             when NoteKey = 'ED ECDS Departure Destination' then note.DischargeDateTime
                         else [timestamp] end between locs.StartDateTime and locs.EndDateTime
-                    --where VisitId = '1395736'
-                    --and strikeoutid is NULL ---don't pick up cancelled/overwritten values
-                    -- and NoteKey in ('ED Arrival Transport Mode','ED Ambulance Arrival Date/Time','ED Seen By',
-                        --'ED Nursing Assessment By','ED Nurse completing Triage','Manchester Triage Score', 'ED Senior Reviewed',
-                        --'ED Clerking Actual Date/Time','ED Specialty Reviewed Dt','DTA Actual Date/Time','ED Departure Ready Date/Time','ED ECDS Departure Destination')
                     order by VisitId
-
-
-
-
-                    ------------------Additional asks - Obs
-                    --select NCAttendanceId, ChartType, ChartDateTime
-                    --	into #obs --select * from #obs
-                    --	 FROM [cl3-data].[DataWarehouse].[ED].[vw_EDAttendanceObservationChartTotal]
-                    --	 where ChartDateTime between '25-MAR-2023 00:00:00' and '31-MAR-2024 23:59:59'
-
-                    ----Get obs that correspond to attendances provided
-                    --select obs.*
-                    --from #obs obs
-                    --inner join #att att on att.AttendanceID = obs.NCAttendanceId
-                    --order by obs.NCAttendanceID
-
-
-
-                    ----------------------------------------------------------------------------------------------------------------------
-                    -----------------ADMISSIONS QUERY-------------------------------------------------------------------------------------
-                    ----------------------------------------------------------------------------------------------------------------------
-
-                    ------------Find which patients go on to be admitted from the attendances
-                    --select nerve.NCAttendanceID, case when admitprvsprefno is not NULL and ActualDischargeDestinationWardCode in ('rk950aau','rk950aau01', 'rk950afu') then 'Admitted - SDEC'
-                    --							when admitprvsprefno is not NULL and ActualDischargeDestinationWardCode in ('rk950mau','rk950amw') then 'Admitted - MAU'
-                    --							when admitprvsprefno is not NULL and ActualDischargeDestinationWardCode like 'rk950%' then 'Admitted - Other Derriford Ward'
-                    --							else 'Non-Admitted' end as Adm,
-                    --							ActualDischargeDestinationWardCode
-                    --into #adm
-                    --from [cl3-data].DataWarehouse.ed.vw_EDAttendance nerve
-                    -----inner join attendances to get only required records
-                    --inner join #att att on att.AttendanceID = nerve.NCAttendanceId
                     """
     events_raw = pd.read_sql(events_query, realtime_engine)
     # ---------------------- Imaging data
