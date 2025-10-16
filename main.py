@@ -39,13 +39,13 @@ if __name__ == "__main__":
 
                     -------First get attendance-level data
                     select AttendanceID = ncattendanceId
-                            ,ArrivalMode = case when AmbulanceArrivalDate is NULL then 'Walk-In' else 'Ambulance' end
+                            ,ArrivalMode = case when AmbulanceArrivalDateTime is NULL then 'Walk-In' else 'Ambulance' end
                             ,Injury = IsInjury
                             ,TriageCategory
-                            ,ArrivalDateTime
+                            ,NCArrivalDateTime AS ArrivalDateTime
                             ,DischargeDateTime
                     into #att
-                    from [cl3-data].DataWarehouse.ed.vw_EDAttendance
+                    from NerveCentreFeed.ed.vw_EDAttendance
                     where dischargedatetime between '01-APR-2025 00:00:00' and '30-APR-2025 23:59:59'
 
                     ----Use location table to get all locations for these attendances
